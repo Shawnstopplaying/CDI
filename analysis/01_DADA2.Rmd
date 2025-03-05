@@ -1,5 +1,5 @@
 ---
-title: "Assigning ASVs witi DADA2"
+title: "Assigning ASVs with DADA2"
 output: html_document
 date: "2025-03-05"
 editor_options: 
@@ -42,8 +42,11 @@ pacman::p_load(tidyverse, dada2, phyloseq, patchwork, DT, devtools, install = FA
 # Set the raw fastq path to the raw sequencing files 
 
 # Path to the fastq files 
-raw_fastqs_path <- "../16S_raw_data"
+raw_fastqs_path <- "16S_raw_data"
 raw_fastqs_path
+library(rprojroot)
+project_root <- rprojroot::find_rstudio_root_file()
+setwd(project_root)
 dir.exists(raw_fastqs_path)
 
 # What files are in this path? Intuition Check 
@@ -77,3 +80,24 @@ head(reverse_reads)
 stopifnot(length(reverse_reads) == length(forward_reads))
 ```
 
+
+#Visualize and inspect quality of the sequences
+#see the quality of the raw reads befire we trim our sequences
+```{r raw-quality-plot, fig.width=12, fig.height=8}
+#randomly select 12 samples
+random_samples <- sample(1:length(reverse_reads), size = 12)
+random_samples
+
+#forward quality plot
+forward_filteredQual_plot_12 <-
+  plotQualityProfile(forward_reads[random_samples]) +
+  labs(title = "Forward Reads : Raw Quality")
+
+#reverse quality plot
+reverse_filteredQual_plot_12 <-
+  plotQualityProfile(reverse_reads[random_samples]) +
+  labs(title = "Reverse Reads : Raw Quality")
+  
+#put the plots together with patchwork
+forward_filteredQual_plot_12 + reverse_filteredQual_plot_12
+```

@@ -1,0 +1,289 @@
+---
+title: "Filtering & Trimming Amplicon Sequences"
+output: html_document
+date: "2025-03-05"
+---
+
+#Setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      fig.align = "center",
+                      fig.path = "../figures/01_QualityTrimming/") # send any figure output to this folder 
+```
+
+
+# Set the seed 
+```{r set-seed}
+set.seed(238428)
+```
+
+
+# Timing of Script
+```{r rmd-start}
+# What time did we start running this script? 
+start_time <- Sys.time()
+start_time
+```
+
+# Load Libraries 
+```{r load-libraries}
+# Efficient package loading with pacman 
+# Don't forget to install pacman and DT if you don't have it yet. :) 
+pacman::p_load(tidyverse, dada2, phyloseq, patchwork, DT, devtools, install = FALSE)
+```
+
+
+# Reading Raw Sequencing Files 
+```{r load-data}
+# Set the raw fastq path to the raw sequencing files 
+
+# Path to the fastq files 
+raw_fastqs_path <- "16S_raw_data"
+raw_fastqs_path
+library(rprojroot)
+project_root <- rprojroot::find_rstudio_root_file()
+setwd(project_root)
+dir.exists(raw_fastqs_path)
+
+# What files are in this path? Intuition Check 
+head(list.files(raw_fastqs_path))
+
+# How many files are there? 
+length(list.files(raw_fastqs_path))
+
+# Create vector of forward reads
+forward_reads <- list.files(raw_fastqs_path, pattern = "*_1.fastq.gz", full.names = TRUE)  
+
+# Normalize Path
+forward_reads <- normalizePath(forward_reads)
+
+# Intuition Checks 
+head(forward_reads)
+
+# Intuition check #2: We should have fewer reads in the forward vector than in total 
+stopifnot(length(forward_reads) < length(list.files(raw_fastqs_path)))
+
+# Create a vector of reverse reads 
+reverse_reads <- list.files(raw_fastqs_path, pattern = "*_2.fastq.gz", full.names = TRUE)
+
+# Normalize Path
+reverse_reads <- normalizePath(reverse_reads)
+
+# Intuition Checks
+head(reverse_reads)
+
+# Intuition check #2: Need to have equal number of forward and reverse files 
+stopifnot(length(reverse_reads) == length(forward_reads))
+```
+
+
+# Visualize and inspect quality of the sequences
+# See the quality of the raw reads befire we trim our sequences
+```{r raw-quality-plot, fig.width=12, fig.height=8}
+#randomly select 12 samples
+random_samples <- sample(1:length(reverse_reads), size = 12)
+random_samples
+
+#forward quality plot
+forward_filteredQual_plot_12 <-
+  plotQualityProfile(forward_reads[random_samples]) +
+  labs(title = "Forward Reads : Raw Quality")
+
+#reverse quality plot
+reverse_filteredQual_plot_12 <-
+  plotQualityProfile(reverse_reads[random_samples]) +
+  labs(title = "Reverse Reads : Raw Quality")
+  
+#put the plots together with patchwork
+forward_filteredQual_plot_12 + reverse_filteredQual_plot_12
+```
+
+# Aggregated Raw Quality Plots
+```{r raw-aggregate-plot, fig.width=5.5, fig.height=3.5}
+# Aggregate all QC plots 
+# Forward reads
+forward_preQC_plot <- 
+  plotQualityProfile(forward_reads, aggregate = TRUE) + 
+  labs(title = "Forward Pre-QC")
+
+# reverse reads
+reverse_preQC_plot <- 
+  plotQualityProfile(reverse_reads, aggregate = TRUE) + 
+  labs(title = "Reverse Pre-QC")
+
+# Now, let's put the two plots together
+preQC_aggregate_plot <- 
+  # Plot the forward and reverse together 
+  forward_preQC_plot + reverse_preQC_plot
+# Show the plot
+preQC_aggregate_plot
+```
+
+# Prepare a placeholder for filtered reads
+```{r prep-filtered-sequences}
+# Create vector of sample names from the filenames 
+sample_names <- sapply(strsplit(basename(forward_reads), "_"), `[`,1) 
+
+# Intuition Check 
+head(sample_names)
+
+# Place filtered reads into filtered_fastqs_path
+filtered_fastqs_path <- "data/02_Filtered_fastqs"
+
+# Intuition Check 
+filtered_fastqs_path
+
+# create 2 vectors: filtered_forward_reads & filtered_reverse_reads
+filtered_forward_reads <- 
+  file.path(filtered_fastqs_path, paste0(sample_names, "_1_filtered.fastq.gz"))
+
+# Intuition Check 
+length(filtered_forward_reads)
+
+# reverse reads
+filtered_reverse_reads <- 
+  file.path(filtered_fastqs_path, paste0(sample_names, "_2_filtered.fastq.gz"))
+
+# Intuition Check 
+head(filtered_reverse_reads)
+```
+
+
+# Filter and Trim Reads
+```{r filter-and-trim}
+# Assign and write out filtered fastq files 
+filtered_reads <- 
+  filterAndTrim(fwd = forward_reads, filt = filtered_forward_reads,
+              rev = reverse_reads, filt.rev = filtered_reverse_reads,
+              maxN = 0, maxEE = c(1,1), #the sequence quality was lower
+              
+              # Remove the first 8 bases at the beginning of the forward read
+              trimLeft = c(0, 0), #The first 10 bp had slightly lower quality, but was still >Q30, so it was retained.
+              
+              # Keep the full forward & trim final 2 bases in the reverse with truncLen
+              truncLen = c(220, 140), #The quality score of forward reads drops significantly after 220 bp.The quality of reverse reads starts to drop significantly after 140 bp.
+              truncQ = 2, rm.phix = TRUE, compress = TRUE, 
+              
+              # Set threads to be 8-10
+              multithread = 10) 
+```
+
+
+# Assess Trimmed Read Quality 
+```{r filterTrim-quality-plots,  fig.width=12, fig.height=8}
+# Plot the 12 random samples after QC
+forward_filteredQual_plot_12 <- 
+  plotQualityProfile(filtered_forward_reads[random_samples]) + 
+  labs(title = "Trimmed Forward Read Quality")
+
+reverse_filteredQual_plot_12 <- 
+  plotQualityProfile(filtered_reverse_reads[random_samples]) + 
+  labs(title = "Trimmed Reverse Read Quality")
+
+# Put the two plots together 
+forward_filteredQual_plot_12 + reverse_filteredQual_plot_12
+```
+
+# Aggregated Trimmed Plots 
+```{r qc-aggregate-plot, fig.width=5.5, fig.height=3.5}
+# Aggregate all QC plots 
+# Forward reads
+forward_postQC_plot <- 
+  plotQualityProfile(filtered_forward_reads, aggregate = TRUE) + 
+  labs(title = "Forward Post-QC")
+
+# reverse reads
+reverse_postQC_plot <- 
+  plotQualityProfile(filtered_reverse_reads, aggregate = TRUE) + 
+  labs(title = "Reverse Post-QC")
+
+# Now, let's put the two plots together
+postQC_aggregate_plot <- 
+  # Plot the forward and reverse together 
+  forward_postQC_plot + reverse_postQC_plot
+# Show the plot
+postQC_aggregate_plot
+```
+
+
+# Read Retention Post-QC
+```{r filterTrim-stats, message = FALSE, fig.height = 2.5, fig.width=8}
+# Make output into dataframe 
+filtered_df <- as.data.frame(filtered_reads) %>%
+  mutate(percent.retained = reads.out/reads.in)
+
+# Intuition check
+# Visualize it in table format 
+DT::datatable(filtered_df)
+
+# Let's calculate some statistics
+read_stats_df <- 
+  filtered_df %>%
+  reframe(median_reads_in = median(reads.in),
+          median_reads_out = median(reads.out),
+          median_percent_retained = (median(reads.out)/median(reads.in)),
+          max_percent_retained = max(reads.out/reads.in),
+          min_percent_retained = min(reads.out/reads.in))
+
+# Take a look at it!
+read_stats_df
+
+# Plot it 
+numSeqs_QC_dotplot <-
+  filtered_df %>%
+  ggplot(aes(x = reads.in, y = reads.out)) + 
+  geom_point(alpha = 0.5, size = 2) + 
+  labs(x = "# of Raw Seqs", 
+       y = "# of Seqs Retained") + 
+  # Now let's add a 1:1 line for reference of keeping 100% of the reads
+  geom_abline(slope=1, intercept = 0, color = "deeppink")
+
+# Now, let's look at the number of reads retained in a histogram
+numRetained_QC_histplot <- 
+  filtered_df %>%
+  ggplot(aes(x = reads.out)) + 
+  geom_histogram() + 
+  labs(x = "# of Seqs Retained", 
+       y = "# of Samples") 
+
+# Create a histogram of percent reads retained in a histogram
+percSeqs_QC_histplot <- 
+  filtered_df %>%
+  ggplot(aes(x = percent.retained)) + 
+  geom_histogram() + 
+  labs(x = "% of Seqs Retained", 
+       y = "# of Samples") + 
+  # Set the scale to be between 0-1 (0-100%)
+  scale_x_continuous(limits = c(0, 1))
+
+# Now, let's put the plots together
+numSeqs_QC_dotplot + numRetained_QC_histplot + percSeqs_QC_histplot + 
+  plot_annotation(tag_levels = 'A')
+```
+
+
+# Visualize QC differences in plot 
+```{r pre-post-QC-plot, fig.width=6, fig.height=5.5}
+# Plot the pre and post together in one plot
+preQC_aggregate_plot / postQC_aggregate_plot
+```
+
+
+# Check Render Time
+```{r stop-time}
+# Take the time now that we are at the end of the script
+end_time <- Sys.time()
+end_time 
+
+# Echo the elapsed time
+elapsed_time <- round((end_time - start_time), 3)
+elapsed_time
+```
+
+
+# Session Information 
+```{r session-info}
+# Ensure reproducibility 
+devtools::session_info()
+```
+
