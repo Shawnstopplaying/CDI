@@ -1,0 +1,79 @@
+---
+title: "Assigning ASVs witi DADA2"
+output: html_document
+date: "2025-03-05"
+editor_options: 
+  chunk_output_type: console
+---
+
+#set the path of figure output
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      fig.align = "center",
+                      fig.path = "../figures/01_DADA2")
+```
+
+
+#set the seed/environment
+```{r set-seed}
+#any number can be chosen
+set.seed(238428)
+```
+
+
+# Timing of Script
+```{r rmd-start}
+# What time did we start running this script? 
+start_time <- Sys.time()
+start_time
+```
+
+
+# Load Libraries 
+```{r load-libraries}
+# Efficient package loading with pacman 
+# Don't forget to install pacman and DT if you don't have it yet. :) 
+pacman::p_load(tidyverse, dada2, phyloseq, patchwork, DT, devtools, install = FALSE)
+```
+
+
+# Reading Raw Sequencing Files 
+```{r load-data}
+# Set the raw fastq path to the raw sequencing files 
+
+# Path to the fastq files 
+raw_fastqs_path <- "../16S_raw_data"
+raw_fastqs_path
+dir.exists(raw_fastqs_path)
+
+# What files are in this path? Intuition Check 
+head(list.files(raw_fastqs_path))
+
+# How many files are there? 
+length(list.files(raw_fastqs_path))
+
+# Create vector of forward reads
+forward_reads <- list.files(raw_fastqs_path, pattern = "*_1.fastq.gz", full.names = TRUE)  
+
+# Normalize Path
+forward_reads <- normalizePath(forward_reads)
+
+# Intuition Checks 
+head(forward_reads)
+
+# Intuition check #2: We should have fewer reads in the forward vector than in total 
+stopifnot(length(forward_reads) < length(list.files(raw_fastqs_path)))
+
+# Create a vector of reverse reads 
+reverse_reads <- list.files(raw_fastqs_path, pattern = "*_2.fastq.gz", full.names = TRUE)
+
+# Normalize Path
+reverse_reads <- normalizePath(reverse_reads)
+
+# Intuition Checks
+head(reverse_reads)
+
+# Intuition check #2: Need to have equal number of forward and reverse files 
+stopifnot(length(reverse_reads) == length(forward_reads))
+```
+
