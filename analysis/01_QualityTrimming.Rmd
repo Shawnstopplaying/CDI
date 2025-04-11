@@ -2,19 +2,21 @@
 title: "Filtering & Trimming Amplicon Sequences"
 output: html_document
 date: "2025-03-05"
+editor_options: 
+  chunk_output_type: console
 ---
 
 #Setup
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
                       fig.align = "center",
-                      fig.path = "figures/01_QualityTrimming/") # send any figure output to this folder 
+                      fig.path = "../figures/01_QualityTrimming/") # send any figure output to this folder 
 ```
 
 
 # Set the seed 
 ```{r set-seed}
-set.seed(238428)
+set.seed(20020206)
 ```
 
 
@@ -158,14 +160,14 @@ filtered_reads <-
               maxN = 0, maxEE = c(1,1), #the sequence quality was lower
               
               # Remove the first 8 bases at the beginning of the forward read
-              trimLeft = c(0, 0), #The first 10 bp had slightly lower quality, but was still >Q30, so it was retained.
+              trimLeft = c(10, 10), #The first 10 bp had slightly lower quality, but was still >Q30, so it was retained.
               
               # Keep the full forward & trim final 2 bases in the reverse with truncLen
-              truncLen = c(220, 140), #The quality score of forward reads drops significantly after 220 bp.The quality of reverse reads starts to drop significantly after 140 bp.
+              truncLen = c(220, 130), #The quality score of forward reads drops significantly after 220 bp.The quality of reverse reads starts to drop significantly after 140 bp.
               truncQ = 2, rm.phix = TRUE, compress = TRUE, 
               
               # Set threads to be 8-10
-              multithread = 10) 
+              multithread = 20) 
 ```
 
 

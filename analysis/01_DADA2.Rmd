@@ -10,14 +10,14 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
                       fig.align = "center",
-                      fig.path = "../figures/01_DADA2")
+                      fig.path = "../figures/01_DADA2/")
 ```
 
 
 #set the seed/environment
 ```{r set-seed}
 #any number can be chosen
-set.seed(238428)
+set.seed(20020206)
 ```
 
 
@@ -101,3 +101,5 @@ reverse_filteredQual_plot_12 <-
 #put the plots together with patchwork
 forward_filteredQual_plot_12 + reverse_filteredQual_plot_12
 ```
+
+

@@ -107,7 +107,7 @@ forward_error_plot + reverse_error_plot
     - In the actual data, the forward sequence is 150bp and the reverse sequence is 230bp. After Trim, it is 140bp and 220bp. 
     - Overlap=220+140−252=108bp
     
-<span style="color: red;">INTERPRETATION #1: The hypothesized ASV length for this dataset is 252 bp. This is based on the following considerations: (1) The sequencing strategy used was paired-end 2×150 bp Illumina HiSeq. (2) The total length of the starting amplicons, targeting the 515F-806R region, is 291 bp. (3) After removing the 515F (19 bp) and 806R (20 bp) primers, the expected ASV length without primers is 252 bp. (4) Since `trimLeft = 0`, no bases were removed from the start, and the ASV length remains 252 bp after `filterAndTrim()`. (5) The actual sequence lengths after trimming are 220 bp (forward) and 140 bp (reverse), resulting in an overlap of 108 bp, which is sufficient for accurate merging.</span>
+<span style="color: red;">INTERPRETATION #1: The hypothesized ASV length for this dataset is 232 bp. This is based on the following considerations: (1) The sequencing strategy used was paired-end 2×150 bp Illumina HiSeq. (2) The total length of the starting amplicons, targeting the 515F-806R region, is 291 bp. (3) After removing the 515F (19 bp) and 806R (20 bp) primers, the expected ASV length without primers is 232 bp. (4) Since `trimLeft = 0`, no bases were removed from the start, and the ASV length remains 252 bp after `filterAndTrim()`. (5) The actual sequence lengths after trimming are 210 bp (forward) and 130 bp (reverse), resulting in an overlap of 108 bp, which is sufficient for accurate merging.</span>
 
 
 # Infer ASVs
@@ -120,7 +120,7 @@ dada_forward <-
 
 # Take a look at the data
 typeof(dada_forward)
-dada_forward
+#dada_forward
 
 # Reverse ASVs
 dada_reverse <-
@@ -130,7 +130,7 @@ dada_reverse <-
 
 # Take a look at the data
 typeof(dada_reverse)
-dada_reverse[30]
+#dada_reverse[30]
 
 ```
 
@@ -184,21 +184,21 @@ plot_ASVLength_raw <-
   data.frame(ASV_Length = nchar(getSequences(raw_ASV_table))) %>%
   ggplot(aes(x = ASV_Length)) + 
   geom_histogram() +
-  scale_x_continuous(limits = c(240, 265)) +
+  scale_x_continuous(limits = c(220, 245)) +
   labs(title = "Raw ASV Lengths",
        y = "Number of ASVs", x = "ASV Sequence Length (bps)")
 print(plot_ASVLength_raw)
 ```
-<span style="color: red;">INTERPRETATION #2: The expected length of the ASV is 252 bp, and in fact almost all ASVs are 253 bp, which is in line with expectations.
+<span style="color: red;">INTERPRETATION #2: The expected length of the ASV is 232 bp, and in fact almost all ASVs are 233 bp, which is in line with expectations.
 
 
 # Trim ASVs
 ```{r trim-ASVs}
 
-# Only pull ASVs that have a length of 253 bps
+# Only pull ASVs that have a length of 233 bps
 raw_ASV_table_trimmed <-
-  raw_ASV_table[,nchar(getSequences(raw_ASV_table)) == 253]
-raw_ASV_table_trimmed
+  raw_ASV_table[,nchar(getSequences(raw_ASV_table)) == 233]
+#raw_ASV_table_trimmed
 
 # Intuition Check
 table(nchar(getSequences(raw_ASV_table_trimmed)))
@@ -208,7 +208,7 @@ plot_ASVLength_trimmed <-
   data.frame(ASV_Length = nchar(getSequences(raw_ASV_table_trimmed))) %>%
   ggplot(aes(x = ASV_Length)) + 
   geom_histogram() +
-  scale_x_continuous(limits = c(240, 265)) +
+  scale_x_continuous(limits = c(220, 245)) +
   labs(title = "Trimed Raw ASV Lengths",
        y = "Number of ASVs", x = "ASV Sequence Length (bps)")
 print(plot_ASVLength_trimmed)
@@ -245,7 +245,7 @@ plot_ASVLength_NoChimeras <-
   ggplot(aes(x = Seq_Length_NoChim )) + 
   geom_histogram()+ 
   # include the x-axis scales
-  scale_x_continuous(limits = c(240, maxLength_ASV + 12)) + 
+  scale_x_continuous(limits = c(220, maxLength_ASV + 12)) + 
   labs(title = "Post-Chimera ASV Lengths",
        y = "Number of ASVs \n (Post-Chimera Removal)", 
        x = "ASV Sequence Length (bps)")
@@ -280,7 +280,7 @@ print(paste("Proportion retained after both trimming and chimera removal:",
             round(prop_retained_total, 4)))
 
 ```
-<span style="color: red;">INTERPRETATION #4: Proportion retained after trimming: 0.9025; Proportion retained after chimera removal: 0.9649; Proportion retained after both trimming and chimera removal: 0.8709.Finally, 87.09% of the data can be used for subsequent analysis, which is a very healthy pipeline result.</span> 
+<span style="color: red;">INTERPRETATION #4: Proportion retained after trimming: 0.9031; Proportion retained after chimera removal: 0.974; Proportion retained after both trimming and chimera removal: 0.8797.Finally, 87.97% of the data can be used for subsequent analysis, which is a very healthy pipeline result.</span> 
 
 
 ```{r track-reads, fig.width=6, fig.height=4}
@@ -363,5 +363,81 @@ plot_ReadDepth + plot_ASVRichness + plot_ReadDepth_ASVRichness +
 <span style="color: red;">INTERPRETATION #5: 1, The distribution appears roughly unimodal, centered around 10,000–25,000 reads per sample. 2, The ASV richness is also unimodal, mostly falling within 25 to 100 ASVs per sample.Some samples show higher ASV richness (~125 ASVs), while a few have low richness (< 25 ASVs). 3, There appears to be a positive correlation between sequencing depth and ASV richness, but the trend is not perfectly linear.</span>
 
 
+# Write noChimeras_ASV_table
+```{r write-nochim-table}
+
+# Transpose abundance table so ASVs become rows
+asv_table <- t(noChimeras_ASV_table)
+
+# Assign 4-digit ASV IDs like ASV_0001, ASV_0002, ...
+asv_ids <- sprintf("ASV_%04d", seq_len(nrow(asv_table)))
+rownames(asv_table) <- asv_ids
+
+# Save cleaned ASV table
+write.table(asv_table,
+            file = "data/01_DADA2/ASV_table.tsv",
+            sep = "\t", quote = FALSE, col.names = NA)
+
+# Save raw (non-transposed) version as backup
+write.table(noChimeras_ASV_table,
+            file = "data/01_DADA2/ASV_table_raw.tsv",
+            sep = "\t", quote = FALSE, col.names = NA)
+
+cat(" Cleaned sample names:\n")
+print(head(colnames(asv_table)))
+cat(" Example ASV IDs:\n")
+print(head(rownames(asv_table)))
+
+```
+
+
+# Assign taxonomy to ASVs using SILVA database, with ASV IDs as rownames
+```{r assign-taxonomy}
+library(Biostrings)  # Load Biostrings for handling DNA sequences
+
+#  Extract ASV sequences and create DNAStringSet
+asv_seqs <- colnames(noChimeras_ASV_table)
+asv_dna <- DNAStringSet(asv_seqs)
+
+#  Create 4-digit ASV IDs and assign as names to the sequences
+asv_ids <- sprintf("ASV_%04d", seq_along(asv_seqs))
+names(asv_dna) <- asv_ids  # Assign ASV IDs as sequence names for output consistency
+
+#  Assign taxonomy using SILVA training set
+taxa_silva <- dada2::assignTaxonomy(
+  asv_dna,
+  "data/silva_db/silva_nr99_v138.1_train_set.fa.gz",
+  multithread = TRUE
+)
+
+#  Add species-level annotation using species assignment file
+taxa_silva_species <- dada2::addSpecies(
+  taxa_silva,
+  "data/silva_db/silva_species_assignment_v138.1.fa.gz"
+)
+
+#  Fix overwritten rownames caused by addSpecies()
+rownames(taxa_silva_species) <- names(asv_dna)
+
+#  Convert to data frame, move ASV ID column to front
+taxa_df <- as.data.frame(taxa_silva_species)
+taxa_df$ASV <- rownames(taxa_df)
+taxa_df <- taxa_df[, c("ASV", setdiff(colnames(taxa_df), "ASV"))]
+
+#  Save taxonomy table as a tab-separated file
+write.table(taxa_df,
+            file = "data/01_DADA2/ASV_taxonomy.tsv",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+#  Intuition check - confirm ASV IDs are correctly labeled
+print(head(taxa_df$ASV))
+
+```
+
+
+```{r save-track-counts-df}
+# Save tracking object for downstream phyloseq integration
+save(track_counts_df, file = "data/01_DADA2/track_read_counts.RData")
+```
 
 
