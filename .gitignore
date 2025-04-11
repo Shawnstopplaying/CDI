@@ -5,3 +5,8 @@
 *.fastq.gz
 */*.fastq.gz
 */*/*.fastq.gz
+*.fa.gz
+*/*.fa.gz
+*/*/*.fa.gz
+# Ignore SILVA DB
+data/silva_db/*.fa.gz
