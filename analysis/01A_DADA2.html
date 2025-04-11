@@ -364,7 +364,7 @@ set.seed(20020206)</code></pre>
 <pre class="r"><code># What time did we start running this script? 
 start_time &lt;- Sys.time()
 start_time</code></pre>
-<pre><code>## [1] &quot;2025-04-10 09:05:05 EDT&quot;</code></pre>
+<pre><code>## [1] &quot;2025-04-11 17:02:58 EDT&quot;</code></pre>
 </div>
 <div id="load-libraries" class="section level1">
 <h1>Load Libraries</h1>
@@ -387,11 +387,11 @@ dir.exists(raw_fastqs_path)</code></pre>
 <pre><code>## [1] TRUE</code></pre>
 <pre class="r"><code># What files are in this path? Intuition Check 
 head(list.files(raw_fastqs_path))</code></pre>
-<pre><code>## [1] &quot;filtered_fastq&quot;         &quot;SRR13060060_1.fastq.gz&quot; &quot;SRR13060060_2.fastq.gz&quot;
-## [4] &quot;SRR13060061_1.fastq.gz&quot; &quot;SRR13060061_2.fastq.gz&quot; &quot;SRR13060062_1.fastq.gz&quot;</code></pre>
+<pre><code>## [1] &quot;SRR13060060_1.fastq.gz&quot; &quot;SRR13060060_2.fastq.gz&quot; &quot;SRR13060061_1.fastq.gz&quot;
+## [4] &quot;SRR13060061_2.fastq.gz&quot; &quot;SRR13060062_1.fastq.gz&quot; &quot;SRR13060062_2.fastq.gz&quot;</code></pre>
 <pre class="r"><code># How many files are there? 
 length(list.files(raw_fastqs_path))</code></pre>
-<pre><code>## [1] 347</code></pre>
+<pre><code>## [1] 346</code></pre>
 <pre class="r"><code># Create vector of forward reads
 forward_reads &lt;- list.files(raw_fastqs_path, pattern = &quot;*_1.fastq.gz&quot;, full.names = TRUE)  
 

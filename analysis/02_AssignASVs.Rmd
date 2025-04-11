@@ -376,12 +376,12 @@ rownames(asv_table) <- asv_ids
 # Save cleaned ASV table
 write.table(asv_table,
             file = "data/01_DADA2/ASV_table.tsv",
-            sep = "\t", quote = FALSE, col.names = NA)
+            sep = "\t", quote = FALSE)
 
 # Save raw (non-transposed) version as backup
 write.table(noChimeras_ASV_table,
             file = "data/01_DADA2/ASV_table_raw.tsv",
-            sep = "\t", quote = FALSE, col.names = NA)
+            sep = "\t", quote = FALSE)
 
 cat(" Cleaned sample names:\n")
 print(head(colnames(asv_table)))

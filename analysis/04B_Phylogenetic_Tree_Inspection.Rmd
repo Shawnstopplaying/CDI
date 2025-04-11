@@ -1,0 +1,248 @@
+---
+title: "Pruning & Rooting Phylogenetic Trees with ggTree"
+author: "Mar Schmidt"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    code_folding: show
+    theme: spacelab
+    highlight: pygments
+    keep_md: no
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+      toc_depth: 3
+  keep_md: true  
+editor_options: 
+  chunk_output_type: console
+---
+
+# Goals 
+
+1. Load the [FastTree2](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0009490) unrooted tree that we calculated in `analysis/04A_Phylogenetic_Tree_Construction.Rmd` and `raw_preprocessed_physeq``.  
+2. Merge the unrooted tree to the `raw_preprocessed_phyloseq` object.  
+3. Visualize and inspect tree with [ggtree](https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12628).
+4. Evaluate long branches & prune ASVs, if needed. *If your dataset has long branches, you will need to do this before rooting!!*
+5. After pruning, root the tree, ideally within the Archaea and, if not, mid-root the tree.
+6. Combine the new, rooted tree with the phyloseq object. 
+7. Save 2 phyloseq objects: 1. Unrooted tree phyloseq object, 2. Rooted tree phyloseq object. 
+
+## Inputs 
+
+1. Our previously pre-processed phyloseq object that has chloroplasts, mitochondria, reverse complements, and negative controls removed, which is located in `data/03_PreProcessing/raw_preprocessed_physeq`.
+2. The raw, unrooted maximum liklihood tree that we generated using  [FastTree2](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0009490), which is located in `data/04_PhylogeneticTree/ASVs_unrooted.tree`
+
+## Outputs 
+
+1. The output of this file will be a S4 phloseq objected called `phytree_preprocessed_physeq`, which we will save to `data/04_PhylogeneticTree/`. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      fig.align = "center",
+                      # Always relevant to the document directory 
+                      # send any figure output to this folder 
+                      fig.path = "../figures/04_PhylogeneticTree/",
+                      warning = FALSE) 
+```
+
+
+## Timing of this script
+Let's record how long this file took to run on the class server, which we will record at the end of the script. 
+```{r rmd-start}
+# What time did we start running this script? 
+start_time <- Sys.time()
+```
+
+
+## Set my seed 
+```{r set-seed}
+# Any number can be chosen 
+set.seed(20020206)
+```
+
+
+## Load Packages 
+```{r load-packages}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("phylobase")
+
+pacman::p_load(tidyverse, phyloseq, ggtree, phytools, tidytree, phylobase,
+               install = FALSE)
+```
+
+## 1. Load Data files 
+```{r load-data}
+# Preprocessed phyloseq object 
+load("data/03_PreProcessing/raw_preprocessed_physeq.RData")
+
+# Inspect the phyloseq object 
+raw_preprocessed_physeq
+
+# Load in the tree! 
+unrooted_tree <- read.tree("data/04_PhylogeneticTree/ASVs_unrooted.tree")
+
+# Take a look at the tree
+unrooted_tree
+str(unrooted_tree)
+```
+
+
+## 2. Merge Unrooted Tree & `raw_preprocessed_physeq`n
+Now that we've loaded in both our `raw_preprocessed_physeq` and the unrooted tree, let's merge them into one phyloseq object that can be used to plot the tree with ggtree. 
+```{r merge-physeq}
+# Intuition check 
+stopifnot(ntaxa(raw_preprocessed_physeq) == ntaxa(unrooted_tree))
+# No news is good news! 
+
+# Merge the tree with the phyloseq object 
+unrooted_physeq <- 
+  merge_phyloseq(raw_preprocessed_physeq, unrooted_tree)
+
+# Let's take a look! 
+unrooted_physeq
+```
+
+
+# 3. Visualize and inspect tree with [ggtree](https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12628).
+
+Now, let's take a look 
+
+## Kingdom Level Tree
+
+```{r plot-tree-unrooted, fig.width=4.5, fig.height=7}
+# Make a basic tree with the domains 
+kingdom_tree <- 
+  ggtree(unrooted_physeq) + 
+  # color tips by kingdom
+  geom_tippoint(mapping = aes(color = Kingdom)) + 
+  # add a title
+  labs(title = "Unrooted Tree") + 
+  scale_color_manual(values = c("firebrick3", "cornflowerblue", "grey")) + 
+  # Move the legend to the bottom of the tree 
+  theme(legend.position = "bottom")
+
+# Look at it 
+kingdom_tree
+
+# Check if tree is rooted
+is.rooted(unrooted_tree) # should be TRUE
+```
+
+<span style="color: red;">INTERPRETATION #1:The unrooted tree looks clean.
+All ASVs are classified as Bacteria, and there are no obviously long or isolated branches.
+This suggests good data quality, likely due to effective chimera removal and ASV length filtering.</span>
+
+
+# 4. Long Branches? 
+
+## 4a. Evaluate Long Branches
+ 
+### Kingdom Tree with Node Labels 
+Let's put labels on our tree so we have a bit more flexibility
+```{r kingdom-node-tree, fig.width=4.5, fig.height=7}
+
+# Add internal node labels to the tree for easy inspection
+kingdom_node_tree <- 
+  kingdom_tree + 
+  geom_text(aes(label = node), hjust = -0.5, vjust = -0.3, size = 2) +
+  labs(title = "Unrooted Tree with Node Labels") +
+  theme(legend.position = "bottom")
+
+# Plot the labeled tree
+kingdom_node_tree
+
+
+```
+
+
+# Objectively judge the long branch
+```{r branch-length-density}
+branch_lengths <- unrooted_tree$edge.length
+
+ggplot(data.frame(length = branch_lengths), aes(x = length)) +
+  geom_histogram(bins = 50, fill = "skyblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Branch Length Distribution", x = "Branch Length", y = "Count")
+```
+
+<span style="color: red;">INTERPRETATION #2:There were no unusually long branches in the unrooted tree.
+We evaluated the tree visually with ggtree (with node labels), and quantitatively via the branch length histogram. Both showed that the vast majority of branches had short to moderate lengths, with no extreme outliers.Therefore, we did not remove any ASVs.</span>
+
+
+# 5. Root the Tree
+```{r root-the-tree}
+# Check if the unrooted tree is already rooted
+is.rooted(phy_tree(unrooted_physeq))
+
+# Root the tree at the midpoint between the two most distant tips
+midpoint_rooted_tree <- 
+  phy_tree(unrooted_physeq) %>%
+  phytools::midpoint.root()
+
+# Confirm the tree is now rooted
+is.rooted(midpoint_rooted_tree)
+
+# Merge the rooted tree back into the phyloseq object
+midpoint_rooted_physeq <- 
+  merge_phyloseq(raw_preprocessed_physeq, midpoint_rooted_tree)
+```
+
+
+# 6. Plot Midpoint Rooted Tree
+```{r plot-midpoint-root-tree,fig.width=4.5, fig.height=7}
+# Quick inspection of tree 
+midpoint_rooted_tree_plot <-
+  ggtree(midpoint_rooted_physeq) + 
+  geom_tippoint(mapping = aes(color = Kingdom)) + 
+  geom_tippoint(aes(color = Kingdom)) + 
+  labs(title = "Midpoint Rooted Tree") + 
+  scale_color_manual(values = c("firebrick3", "cornflowerblue", "grey"))
+
+# Look at the tree 
+midpoint_rooted_tree_plot
+
+# Add nodes 
+midpoint_rooted_tree_node_plot <- 
+  midpoint_rooted_tree_plot + 
+  geom_text(aes(label = node), hjust = -0.5, vjust = -0.3, size = 1.5) 
+
+# View it 
+midpoint_rooted_tree_node_plot
+```
+
+<span style="color: red;">INTERPRETATION #3 The midpoint rooted tree appears finalized, with no additional suspicious ASVs or long branches. The branch length distribution supports that the tree is clean.</span>
+
+
+# 7. Save phyloseq objects
+```{r save-phyloseq-object}
+
+# Now, save midpoint rooted phyloseq object
+save(midpoint_rooted_physeq, 
+     file = "data/04_PhylogeneticTree/midpoint_rooted_physeq.RData")
+```
+
+
+# Final info for Reproducibility 
+
+## Check Render Time
+```{r stop-time}
+# Take the time now that we are at the end of the script
+end_time <- Sys.time()
+end_time 
+
+# Echo the elapsed time
+elapsed_time <- round((end_time - start_time), 3)
+elapsed_time
+```
+
+## Session Information
+
+```{r session-info}
+# Ensure reproducibility with package version information
+devtools::session_info()
+```
+
+
