@@ -1,0 +1,145 @@
+---
+title: "Biodiversity across a salinity gradient"
+author: "Mar Schmidt"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document: 
+    code_folding: show
+    theme: spacelab
+    highlight: pygments
+    keep_md: no
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+      toc_depth: 3
+  keep_md: true  
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      fig.path = "../figures/05_Biodiversity/")
+```
+
+# Goals 
+Run an analysis on the within-sample biodiversity of the samples in our project. 
+
+1. Calculate the Hill Numbers of the samples using the iNEXT package. 
+2. Plot and evaluate the interpolated and extrapolated rarefaction curves from iNEXT. 
+3. Analyze the Hill numbers as it relates to stations and salinity (in PSU).
+4. Test and then answer the scientific question at hand! (Remember, we're doing biology!)
+
+## Inputs 
+1. We will need the `phytree_preprocessed_physeq`, which includes a rooted tree (ideally within the archaea!) that we created in `analysis/04B_Phylogenetic_Tree_Inspection.Rmd`. 
+
+## Outputs 
+
+*This is an exciting analysis!!! We finally get to answer one of our scientific questions!*
+
+1. Calculated biodiversity measures (Hill numbers) across every sample. 
+2. Figures to include in our scientific paper that visualize the data as it relates to the scientific question.
+3. Statistical tests conveying the measured and quantified changes and patterns in biodiversity.
+
+
+# Set up the Environment 
+
+## Timing of this script
+```{r rmd-start}
+# What time did we start running this script? 
+start_time <- Sys.time()
+```
+
+## Set the seed 
+```{r set-seed}
+set.seed(20020206)
+```
+
+## Load Packages & Colors 
+```{r load-packages-colors}
+# install packages for stats
+#install.packages("rstatix")
+#install.packages("ggpubr")
+
+pacman::p_load(tidyverse, devtools, patchwork, iNEXT, phyloseq,
+               # packages for stats
+               ggpubr, rstatix, install = FALSE)
+
+# Load in colors for plotting 
+source("code/colors.R")
+```
+
+
+# Load Data
+```{r load-data}
+# Load your midpoint-rooted phyloseq object
+load("data/04_PhylogeneticTree/midpoint_rooted_physeq.RData")
+
+# Rename for consistency with rest of the script
+physeq <- midpoint_rooted_physeq
+
+# Take a quick look
+physeq
+
+# Check minimum sequencing depth
+min(sample_sums(physeq))
+
+# Extract sample metadata
+metadata_df <- 
+  sample_data(physeq) %>%
+  data.frame()
+
+# View metadata
+glimpse(metadata_df)
+
+```
+
+
+# Run iNEXT to get Hill Number Equation
+```{r iNEXT-biodiversity}
+# Prepare input data for iNEXT: ASVs in rows, samples in columns
+iNEXT_input_df <- 
+  otu_table(physeq) %>%
+  as.matrix()
+
+# If samples are in rows, transpose the matrix
+if (!taxa_are_rows(physeq)) {
+  iNEXT_input_df <- t(iNEXT_input_df)
+  }
+
+
+iNEXT_input_df <- data.frame(iNEXT_input_df)
+
+# Quick inspection
+dim(iNEXT_input_df)
+iNEXT_input_df[1:5, 1:5]
+
+sum(rowSums(iNEXT_input_df) == 0)
+
+# Run iNEXT (can take a while!)
+#iNEXT_data <- iNEXT(iNEXT_input_df, 
+#                    q = c(0, 1, 2),
+#                    datatype = "abundance")
+
+# Save iNEXT results to an .RData file
+#save(iNEXT_data, file = "data/05_Biodiversity/iNEXT_data.RData")
+
+```
+
+Since iNEXT takes a while to run, we will load in the data that was caluculated before! 
+
+```{r load-iNEXT-data}
+load("data/05_Biodiversity/iNEXT_data.RData")
+
+# Inspect 
+str(iNEXT_data)
+typeof(iNEXT_data)
+```
+
+
+
+
+
+
+
