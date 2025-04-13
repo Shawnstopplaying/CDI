@@ -275,10 +275,14 @@ iNEXT_df <- iNEXT_data_group$iNextEst$size_based %>%
 iNEXT_df$Group <- factor(iNEXT_df$Group, levels = group_levels)
 
 # Plot with one line per sample
-ggplot(iNEXT_df, aes(x = m, y = qD, group = SampleName, color = Group)) +
+ggplot(iNEXT_df, aes(x = m, y = qD, 
+                     group = interaction(SampleName, Method), 
+                     color = Group, linetype = Method)) +
   geom_line(size = 0.4, alpha = 0.9) +
   facet_wrap(~ Order.q, scales = "free_y") +
   scale_color_manual(values = group_colors) +
+  scale_linetype_manual(values = c("Rarefaction" = "solid", "Extrapolation" = "dashed")) +
+  scale_x_continuous(limits = c(0, 60000)) +
   theme_bw(base_size = 12) +
   theme(
     legend.position = "right",
