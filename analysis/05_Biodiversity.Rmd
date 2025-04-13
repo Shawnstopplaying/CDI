@@ -43,6 +43,17 @@ Run an analysis on the within-sample biodiversity of the samples in our project.
 3. Statistical tests conveying the measured and quantified changes and patterns in biodiversity.
 
 
+# Scientific Question:
+How does microbiota restoration using RBX2660 affect microbial biodiversity in patients with recurrent Clostridioides difficile infection?
+
+Null Hypothesis:
+There is no significant change in gut microbial biodiversity (e.g., richness, evenness) before and after RBX2660 treatment in patients with recurrent C. difficile infection.
+
+Alternative Hypothesis:
+RBX2660 treatment increases gut microbial biodiversity (e.g., richness, evenness), as reflected by significant changes in diversity indices such as Hill numbers before and after therapy.
+
+
+
 # Set up the Environment 
 
 ## Timing of this script
@@ -125,6 +136,10 @@ sum(rowSums(iNEXT_input_df) == 0)
 # Save iNEXT results to an .RData file
 #save(iNEXT_data, file = "data/05_Biodiversity/iNEXT_data.RData")
 
+#write.csv(iNEXT_data$iNextEst$size_based,
+#          file = "data/05_Biodiversity/iNEXT_size_based.csv",
+#          row.names = FALSE)
+
 ```
 
 Since iNEXT takes a while to run, we will load in the data that was caluculated before! 
@@ -135,10 +150,148 @@ load("data/05_Biodiversity/iNEXT_data.RData")
 # Inspect 
 str(iNEXT_data)
 typeof(iNEXT_data)
+
 ```
 
 
+# Add a new variable group: donor, SIx, RIx (x = days after therapy)
+## SI: 6,11,12,13,19,21,23,26,29,31,32,35, RI: 1,2,3,4,5,7,8,9,10,14,17,18,20,24,27,28,33
+```{r add-group}
+# Load required packages
+library(dplyr)
+library(readr)
+source("code/assign_group.R")
 
+# Read the sample metadata table
+metadata <- read_csv("data/metadata.csv")  # Adjust path if needed
+
+# Create Run-to-SampleName mapping table
+run_map <- metadata %>%
+  select(Run, SampleName) %>%
+  filter(!is.na(SampleName))
+
+# Match Assemblage to SampleName
+iNEXT_size_df <- iNEXT_data$iNextEst$size_based %>%
+  left_join(run_map, by = c("Assemblage" = "Run"))
+
+# Add grouping info using your existing assign_group() function
+iNEXT_size_df_grouped <- iNEXT_size_df %>%
+  mutate(Group = sapply(SampleName, assign_group))
+
+# Insert into a new iNEXT_data_group object
+iNEXT_data_group <- iNEXT_data
+iNEXT_data_group$iNextEst$size_based <- iNEXT_size_df_grouped
+
+# Save the new grouped object
+save(iNEXT_data_group, file = "data/05_Biodiversity/iNEXT_data_group.RData")
+
+# Print preview
+head(iNEXT_data_group$iNextEst$size_based)
+
+
+```
+
+
+## `ggiNEXT` Rarefaction Curves 
+```{r iNEXT-colors}
+# Prepare color mapping dataframe
+color_df <- 
+  iNEXT_input_df %>%
+  colnames() %>%
+  data.frame()
+
+# Rename column
+colnames(color_df)[1] <- "names"
+
+# Extract SampleName & Group
+iNEXT_color_df <- 
+  iNEXT_data_group$iNextEst$size_based %>%
+  dplyr::select(SampleName, Group) %>%
+  distinct() %>%
+  left_join(color_df, by = c("SampleName" = "names"))
+
+# Set factor order for consistent legend and coloring
+group_levels <- c("Donor", "SI0", "SI7", "SI14", "SI30", "SI60", "SI90", "SI180",
+                  "RI0", "RI7", "RI14", "RI30", "RI60", "RI90", "RI180")
+iNEXT_color_df$Group <- factor(iNEXT_color_df$Group, levels = group_levels)
+
+# Manually define group colors
+group_colors <- c(
+   # Donor
+  "Donor" = "#000000",
+
+  # SI
+  "SI0"   = "#ccebc5",  
+  "SI7"   = "#b2df8a",  
+  "SI14"  = "#a6cee3",  
+  "SI30"  = "#80b1d3",  
+  "SI60"  = "#4daf4a",  
+  "SI90"  = "#377eb8",  
+  "SI180" = "#08519c",  
+
+  # RI
+  "RI0"   = "#ffeda0",  
+  "RI7"   = "#feb24c",  
+  "RI14"  = "#fd8d3c",  
+  "RI30"  = "#fc4e2a",  
+  "RI60"  = "#e31a1c",  
+  "RI90"  = "#bd0026",  
+  "RI180" = "#800026",  
+
+  # NA
+  "NA" = "#999999"
+)
+# View check
+head(iNEXT_color_df)
+
+```
+
+
+# Check sample
+```{r}
+library(dplyr)
+
+iNEXT_data_group$iNextEst$size_based %>%
+  filter(!is.na(Group)) %>%
+  group_by(Group, m, Order.q) %>%
+  summarise(n_samples = n(), .groups = "drop") %>%
+  arrange(Group, Order.q, m) %>%
+  group_by(Group, Order.q) %>%
+  summarise(min_n = min(n_samples),
+            max_n = max(n_samples),
+            median_n = median(n_samples),
+            total_m_points = n())
+```
+
+
+```{r plot-iNEXT-rarefaction}
+
+# Prepare plot data
+iNEXT_df <- iNEXT_data_group$iNextEst$size_based %>%
+  filter(!is.na(SampleName), !is.na(Group)) %>%
+  arrange(Group, SampleName, Order.q, m)
+
+# Set factor levels for proper legend ordering
+iNEXT_df$Group <- factor(iNEXT_df$Group, levels = group_levels)
+
+# Plot with one line per sample
+ggplot(iNEXT_df, aes(x = m, y = qD, group = SampleName, color = Group)) +
+  geom_line(size = 0.4, alpha = 0.9) +
+  facet_wrap(~ Order.q, scales = "free_y") +
+  scale_color_manual(values = group_colors) +
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "right",
+    legend.title = element_blank()
+  ) +
+  labs(
+    title = "Rarefaction Curves for All Samples (Per Sample Line)",
+    x = "Number of Sequences",
+    y = "Effective Number of ASVs"
+  )
+
+
+```
 
 
 
