@@ -1,5 +1,7 @@
 ---
 title: "Filtering & Trimming Amplicon Sequences"
+author: "Shawn Xinyu Wang"
+date: "`r Sys.Date()`"
 output: html_document
 date: "2025-03-05"
 editor_options: 

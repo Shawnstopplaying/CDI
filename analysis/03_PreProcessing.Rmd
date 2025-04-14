@@ -1,6 +1,6 @@
 ---
 title: "Pre-processing ASVs with Phyloseq"
-author: "Mar Schmidt"
+author: "Shawn Xinyu Wang"
 date: "`r Sys.Date()`"
 output:
   html_document: 

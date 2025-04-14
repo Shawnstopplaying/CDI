@@ -1,6 +1,6 @@
 ---
-title: "Biodiversity across a salinity gradient"
-author: "Mar Schmidt"
+title: "Biodiversity"
+author: "Shawn Xinyu Wang"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
   html_document: 

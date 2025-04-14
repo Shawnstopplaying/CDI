@@ -1,6 +1,6 @@
 ---
 title: "Pruning & Rooting Phylogenetic Trees with ggTree"
-author: "Mar Schmidt"
+author: "Shawn Xinyu Wang"
 date: "`r Sys.Date()`"
 output:
   html_document: 
