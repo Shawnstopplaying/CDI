@@ -298,5 +298,301 @@ ggplot(iNEXT_df, aes(x = m, y = qD,
 ```
 
 
+## Manual Rarefaction Curves
+```{r manual-rerafaction}
+# Check the structure of iNEXT grouped data object
+str(iNEXT_data_group)
+
+# Create plotting dataframe: Hill number estimates for each sample across sequencing depth
+iNEXT_manual_df <- 
+  iNEXT_data_group$iNextEst$size_based %>%
+  dplyr::rename(names = Assemblage) %>%  # Rename column for merge
+  left_join(metadata_df, by = c("names" = "SampleName")) %>%  # Merge metadata by SampleName
+  mutate(Group = factor(Group, levels = group_levels))  # Set factor levels for Group
+
+# Check dimensions and first few rows
+dim(iNEXT_manual_df)
+head(iNEXT_manual_df)
+
+# Set Group factor levels to control legend order
+group_levels <- c(
+  "Donor", "NA",              
+  "SI0", "SI7", "SI30", "SI60", "SI90", "SI180", 
+  "RI0", "RI7", "RI14", "RI30", "RI60", "RI90", "RI180" 
+)
+iNEXT_manual_df$Group <- factor(iNEXT_manual_df$Group, levels = group_levels)
+
+# Reorder group_colors to match the levels above exactly
+group_colors_ordered <- group_colors[group_levels]
+
+# Plot with legend broken into 3 rows and color order matching factor levels
+iNEXT_manual_df %>%
+  filter(Method == "Rarefaction") %>%  # Only keep rarefaction curves
+  ggplot(aes(x = m, y = qD, color = Group, group = names)) + 
+  geom_line(size = 0.5) +  # 画线 Draw line
+  facet_grid(Order.q ~ Group, scales = "free_y") +  # Facet by q and Group
+  scale_color_manual(values = group_colors_ordered) +  # Match color order
+  theme_bw() + 
+  labs(
+    y = "Effective Number of ASVs", 
+    x = "Number of Sequences"      
+  ) + 
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1), 
+    legend.position = "bottom",                        
+    legend.title = element_blank(),                  
+    legend.text = element_text(size = 9),        
+    legend.box = "horizontal",                    
+    legend.justification = "center"             
+  ) +
+  guides(color = guide_legend(nrow = 3, byrow = TRUE))  
+
+```
+
+<span style="color: red;">INTERPRETATION #1: The rarefaction curves for most samples are stable at all Hill numbers (q = 0, 1, 2), indicating sufficient sequencing depth. When q = 0, species richness can be confidently compared between samples. When q = 1 and q = 2, the curves stabilize earlier, indicating robust detection of common and dominant taxa.</span>
+
+
+# Shapiro-Wilk
+```{r shapiro-wilk-richness}
+# Check if richness (q = 0) is normally distributed across treatment groups
+
+# Filter iNEXT results to get observed richness values (q = 0)
+obs_div_df <- 
+  iNEXT_manual_df %>%
+  dplyr::filter(Method == "Observed", Order.q == 0)
+
+# Quick inspection of the structure
+glimpse(obs_div_df)
+
+# Shapiro-Wilk test for all samples together
+richness_shapiro <- shapiro.test(obs_div_df$qD)
+print(richness_shapiro)
+
+```
+
+
+# Statistically Test Richness all groups
+```{r statistically-test-richness-all-groups}
+obs_rich_df <- 
+  iNEXT_manual_df %>%
+  filter(Method == "Observed", Order.q == 0, !is.na(Group)) %>%
+  droplevels() 
+
+# Kruskal-Wallis
+kw_test <- obs_rich_df %>%
+  kruskal_test(qD ~ Group)
+
+# Dunn
+dunn_result <- obs_rich_df %>%
+  dunn_test(qD ~ Group, p.adjust.method = "fdr") %>%
+  add_xy_position(x = "Group")
+
+# Plot
+rich_ggboxplot <- 
+  ggboxplot(obs_rich_df, x = "Group", y = "qD", 
+            color = "Group", fill = "Group", alpha = 0.3,
+            outlier.shape = NA) + 
+  geom_jitter(aes(color = Group), width = 0.2, size = 1.5) + 
+  scale_color_manual(values = group_colors) + 
+  scale_fill_manual(values = group_colors) + 
+  labs(y = "# of ASVs (Richness)", title = "Richness Differences Between Groups") + 
+  stat_pvalue_manual(dunn_result, hide.ns = TRUE, tip.length = 0.01) +
+  theme_bw() + 
+  theme(
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1)
+  )
+print(rich_ggboxplot)
+
+```
+
+
+# Statistically Test Richness donor RI0/7 SI0/7
+```{r statistically-test-richness}
+# Extract observed richness values (q = 0)
+obs_rich_df <- 
+  iNEXT_manual_df %>%
+  dplyr::filter(Group %in% c("Donor", "SI0", "SI7", "RI0", "RI7")) %>% 
+  dplyr::mutate(Group = factor(Group, levels = c("Donor", "SI0", "SI7", "RI0", "RI7"))) %>%
+  dplyr::filter(Method == "Observed", Order.q == 0)
+
+# Test for significant richness differences across groups (non-parametric)
+kw_test <- obs_rich_df %>%
+  kruskal_test(qD ~ Group)
+
+print(kw_test)
+
+# Pairwise comparisons using Dunn test with FDR adjustment
+dunn_result <- obs_rich_df %>%
+  dunn_test(qD ~ Group, p.adjust.method = "fdr") %>%
+  add_xy_position(x = "Group")
+
+# Richness boxplot by Group
+rich_plot <- 
+  ggboxplot(obs_rich_df, x = "Group", y = "qD", 
+          color = "Group", fill = "Group", alpha = 0.3,
+          outlier.shape = NA) +
+  geom_jitter(aes(color = Group), width = 0.2, size = 1.5) + 
+  scale_color_manual(values = group_colors) + 
+  scale_fill_manual(values = group_colors) + 
+  labs(y = "# of ASVs (Richness)", title = "Richness Differences Between Groups") + 
+  stat_pvalue_manual(dunn_result, hide.ns = TRUE, tip.length = 0.01, step.increase = 0.01, bracket.nudge.y = 1) +
+  theme_bw() + 
+  theme(
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1) 
+  )
+print(rich_plot)
+
+```
+
+
+# Statistically Test Shannon donor RI0/7 SI0/7
+```{r statistically-test-Shannon}
+# Extract observed richness values (q = 1)
+obs_rich_df <- 
+  iNEXT_manual_df %>%
+  dplyr::filter(Group %in% c("Donor", "SI0", "SI7", "RI0", "RI7")) %>% 
+  dplyr::mutate(Group = factor(Group, levels = c("Donor", "SI0", "SI7", "RI0", "RI7"))) %>%
+  dplyr::filter(Method == "Observed", Order.q == 1)
+
+# Test for significant richness differences across groups (non-parametric)
+kw_test <- obs_rich_df %>%
+  kruskal_test(qD ~ Group)
+
+print(kw_test)
+
+# Pairwise comparisons using Dunn test with FDR adjustment
+dunn_result <- obs_rich_df %>%
+  dunn_test(qD ~ Group, p.adjust.method = "fdr") %>%
+  add_xy_position(x = "Group")
+
+# Shannon plot by Group
+shannon_plot <- 
+  ggboxplot(obs_rich_df, x = "Group", y = "qD", 
+          color = "Group", fill = "Group", alpha = 0.3,
+          outlier.shape = NA) +
+  geom_jitter(aes(color = Group), width = 0.2, size = 1.5) + 
+  scale_color_manual(values = group_colors) + 
+  scale_fill_manual(values = group_colors) + 
+  labs(title = "Shannon Diversity Comparison (q = 1)", y = "# of Common ASVs (Shannon)") + 
+  stat_pvalue_manual(dunn_result, hide.ns = TRUE, tip.length = 0.01, step.increase = 0.01, bracket.nudge.y = 1) +
+  theme_bw() + 
+  theme(
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1) 
+  )
+print(shannon_plot)
+
+```
+
+
+# Statistically Test Simpson donor RI0/7 SI0/7
+```{r statistically-test-Simpson}
+# Extract observed richness values (q = 2)
+obs_rich_df <- 
+  iNEXT_manual_df %>%
+  dplyr::filter(Group %in% c("Donor", "SI0", "SI7", "RI0", "RI7")) %>% 
+  dplyr::mutate(Group = factor(Group, levels = c("Donor", "SI0", "SI7", "RI0", "RI7"))) %>%
+  dplyr::filter(Method == "Observed", Order.q == 2)
+
+# Test for significant richness differences across groups (non-parametric)
+kw_test <- obs_rich_df %>%
+  kruskal_test(qD ~ Group)
+
+print(kw_test)
+
+# Pairwise comparisons using Dunn test with FDR adjustment
+dunn_result <- obs_rich_df %>%
+  dunn_test(qD ~ Group, p.adjust.method = "fdr") %>%
+  add_xy_position(x = "Group")
+
+# simpson plot by Group
+simpson_plot <- 
+  ggboxplot(obs_rich_df, x = "Group", y = "qD", 
+          color = "Group", fill = "Group", alpha = 0.3,
+          outlier.shape = NA) +
+  geom_jitter(aes(color = Group), width = 0.2, size = 1.5) + 
+  scale_color_manual(values = group_colors) + 
+  scale_fill_manual(values = group_colors) + 
+  labs(y = "# of Dominant ASVs (Simpson)", title = "Simpson Diversity Comparison (q = 2)") + 
+  stat_pvalue_manual(dunn_result, hide.ns = TRUE, tip.length = 0.01, step.increase = 0.01, bracket.nudge.y = 1) +
+  theme_bw() + 
+  theme(
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1) 
+  )
+print(simpson_plot)
+
+```
+
+
+## Plot 3 box plots
+```{r 3box-plots}
+# Combine richness, Shannon, and Simpson diversity plots in one row
+rich_plot + shannon_plot + simpson_plot +
+  patchwork::plot_annotation(
+    title = "Alpha Diversity Comparison Across Five Groups (Donor, SI/RI 0&7)",
+    theme = theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold")))
+
+```
+
+<span style="color: red;">INTERPRETATION #2:  
+Richness (q = 0): There were significant differences between groups, indicating a shift in the number of ASVs observed after RBX2660 treatment. Donor samples generally showed higher richness, indicating a more diverse community structure before treatment.
+
+Shannon Diversity (q = 1): Shannon diversity in treated groups (e.g., RI7) was significantly higher than baseline, indicating an increase in microbial complexity and balance.
+
+Simpson Diversity (q = 2): The higher Simpson diversity in donor and treated groups indicates that these communities are not dominated by a few taxa, reflecting a more even distribution.</span>
+
+
+<span style="color: red;">INTERPRETATION #3: 
+To statistically test the observations in Interpretation #2:
+
+We applied Kruskal-Wallis tests for each Hill number (q = 0, 1, 2) to assess group-level differences;
+
+When global significance was detected, we performed Dunn post hoc tests to identify specific group comparisons;
+
+All p-values were adjusted for multiple comparisons using the FDR (False Discovery Rate) method;
+
+We visualized the results with boxplots annotated with significance levels.
+
+We chose non-parametric tests (Kruskal-Wallis and Dunn) because normality tests (e.g., Shapiro-Wilk) showed the diversity data were not normally distributed, making ANOVA inappropriate.</span>
+
+
+# Final info for Reproducibility 
+
+## Check Render Time
+```{r stop-time}
+# Take the time now that we are at the end of the script
+end_time <- Sys.time()
+end_time 
+
+# Echo the elapsed time
+elapsed_time <- round((end_time - start_time), 3)
+elapsed_time
+```
+
+## Session Information
+
+```{r session-info}
+# Ensure reproducibility with package version information
+devtools::session_info()
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
