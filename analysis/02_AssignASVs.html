@@ -9,8 +9,9 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
+<meta name="author" content="Shawn Xinyu Wang" />
 
-<meta name="date" content="2025-03-12" />
+<meta name="date" content="2025-04-15" />
 
 <title>AssignASVs</title>
 
@@ -2850,7 +2851,8 @@ display: none;
 
 
 <h1 class="title toc-ignore">AssignASVs</h1>
-<h4 class="date">2025-03-12</h4>
+<h4 class="author">Shawn Xinyu Wang</h4>
+<h4 class="date">April 15, 2025</h4>
 
 </div>
 
@@ -4707,22 +4709,33 @@ the trend is not perfectly linear.</span></p>
 </div>
 <div id="write-nochimeras_asv_table" class="section level1">
 <h1>Write noChimeras_ASV_table</h1>
-<pre class="r"><code># Transpose abundance table so ASVs become rows (as required by phyloseq)
+<pre class="r"><code># Transpose abundance table so ASVs become rows
 asv_table &lt;- t(noChimeras_ASV_table)
 
-# Assign unique ASV IDs
-asv_ids &lt;- paste0(&quot;ASV_&quot;, seq_len(nrow(asv_table)))
+# Assign 4-digit ASV IDs like ASV_0001, ASV_0002, ...
+asv_ids &lt;- sprintf(&quot;ASV_%04d&quot;, seq_len(nrow(asv_table)))
 rownames(asv_table) &lt;- asv_ids
 
 # Save cleaned ASV table
 write.table(asv_table,
             file = &quot;data/01_DADA2/ASV_table.tsv&quot;,
-            sep = &quot;\t&quot;, quote = FALSE, col.names = NA)
+            sep = &quot;\t&quot;, quote = FALSE)
 
-# Optional: save raw (non-transposed) table as backup
+# Save raw (non-transposed) version as backup
 write.table(noChimeras_ASV_table,
             file = &quot;data/01_DADA2/ASV_table_raw.tsv&quot;,
-            sep = &quot;\t&quot;, quote = FALSE, col.names = NA)</code></pre>
+            sep = &quot;\t&quot;, quote = FALSE)
+
+cat(&quot; Cleaned sample names:\n&quot;)</code></pre>
+<pre><code>##  Cleaned sample names:</code></pre>
+<pre class="r"><code>print(head(colnames(asv_table)))</code></pre>
+<pre><code>## [1] &quot;SRR13060060_1_filtered.fastq.gz&quot; &quot;SRR13060061_1_filtered.fastq.gz&quot;
+## [3] &quot;SRR13060062_1_filtered.fastq.gz&quot; &quot;SRR13060065_1_filtered.fastq.gz&quot;
+## [5] &quot;SRR13060066_1_filtered.fastq.gz&quot; &quot;SRR13060067_1_filtered.fastq.gz&quot;</code></pre>
+<pre class="r"><code>cat(&quot; Example ASV IDs:\n&quot;)</code></pre>
+<pre><code>##  Example ASV IDs:</code></pre>
+<pre class="r"><code>print(head(rownames(asv_table)))</code></pre>
+<pre><code>## [1] &quot;ASV_0001&quot; &quot;ASV_0002&quot; &quot;ASV_0003&quot; &quot;ASV_0004&quot; &quot;ASV_0005&quot; &quot;ASV_0006&quot;</code></pre>
 </div>
 <div id="assign-taxonomy-to-asvs-using-silva-database-with-asv-ids-as-rownames" class="section level1">
 <h1>Assign taxonomy to ASVs using SILVA database, with ASV IDs as
@@ -4825,6 +4838,8 @@ write.table(taxa_df,
 #  Intuition check - confirm ASV IDs are correctly labeled
 print(head(taxa_df$ASV))</code></pre>
 <pre><code>## [1] &quot;ASV_0001&quot; &quot;ASV_0002&quot; &quot;ASV_0003&quot; &quot;ASV_0004&quot; &quot;ASV_0005&quot; &quot;ASV_0006&quot;</code></pre>
+<pre class="r"><code># Save tracking object for downstream phyloseq integration
+save(track_counts_df, file = &quot;data/01_DADA2/track_read_counts.RData&quot;)</code></pre>
 </div>
 
 

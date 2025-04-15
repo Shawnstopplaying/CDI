@@ -1,7 +1,7 @@
 ---
 title: "Phylogenetic Tree Construction with FastTree2"
 author: "Shawn Xinyu Wang"
-date: "`r Sys.Date()`"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
   html_document: 
     code_folding: show

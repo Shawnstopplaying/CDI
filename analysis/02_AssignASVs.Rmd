@@ -1,9 +1,8 @@
 ---
 title: "AssignASVs"
 author: "Shawn Xinyu Wang"
-date: "`r Sys.Date()`"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 output: html_document
-date: "2025-03-12"
 editor_options: 
   chunk_output_type: console
 ---
