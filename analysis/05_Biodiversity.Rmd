@@ -329,7 +329,7 @@ group_colors_ordered <- group_colors[group_levels]
 iNEXT_manual_df %>%
   filter(Method == "Rarefaction") %>%  # Only keep rarefaction curves
   ggplot(aes(x = m, y = qD, color = Group, group = names)) + 
-  geom_line(size = 0.5) +  # 画线 Draw line
+  geom_line(size = 0.5) +  # Draw line
   facet_grid(Order.q ~ Group, scales = "free_y") +  # Facet by q and Group
   scale_color_manual(values = group_colors_ordered) +  # Match color order
   theme_bw() + 
@@ -337,6 +337,7 @@ iNEXT_manual_df %>%
     y = "Effective Number of ASVs", 
     x = "Number of Sequences"      
   ) + 
+  scale_x_continuous(limits = c(0, 20000)) +
   theme(
     axis.text.x = element_text(angle = 30, hjust = 1), 
     legend.position = "bottom",                        
