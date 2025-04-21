@@ -1,0 +1,534 @@
+---
+title: "Between-Sample (Beta) Diversity"
+author: "Shawn Xinyu Wang"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document: 
+    code_folding: show
+    theme: spacelab
+    highlight: pygments
+    keep_md: no
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+      toc_depth: 3
+  keep_md: true  
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      fig.path = "../figures/06_Ordination/")
+```
+
+
+# Set up 
+
+## Timing of this script
+```{r rmd-start}
+# What time did we start running this script? 
+start_time <- Sys.time()
+```
+
+
+## Set the seed
+```{r set-seed}
+set.seed(238428)
+```
+
+
+## Load Packages, colors & functions  
+```{r load-packages}
+pacman::p_load(tidyverse, devtools, phyloseq, patchwork, vegan, 
+               install = FALSE)
+
+# Load Colors 
+source("code/colors.R")
+
+# Load functions 
+source("code/functions.R")
+```
+
+
+# Goals
+1. Load in the phyloseq object with rooted tree (midpoint rooted).
+
+2. Evaluate sequencing depth and remove low-quality samples, if necessary.
+
+3. Normalize the read counts between samples for fair beta diversity comparison.
+
+4. Calculate community dissimilarity measures across samples:
+   Bray-Curtis: Abundance-weighted community differences.
+   Weighted UniFrac: Phylogenetic and abundance-weighted differences.
+   Unweighted UniFrac: Presence/absence phylogenetic differences.
+
+5. Perform statistical testing with functions from the vegan R package:
+   PERMANOVA (adonis2()) to test for significant group differences.
+   Betadisper (betadisper() and permutest()) to test for homogeneity of variances.
+
+6. Visualize microbial community structure using unconstrained ordination methods:
+   PCoA (Principal Coordinates Analysis).
+   NMDS (Non-metric Multidimensional Scaling).
+
+# Inputs
+The midpoint_rooted_physeq.RData, which contains the cleaned ASV abundance table, taxonomy, metadata, and rooted phylogenetic tree.
+
+# Outputs
+1. Beta diversity distance matrices (Bray-Curtis, weighted UniFrac).
+2. PERMANOVA and dispersion test results.
+3. Ordination figures (PCoA/NMDS) illustrating changes in microbial community composition over time and between treatment outcomes.
+
+# Scientific Question
+How does RBX2660 treatment affect gut microbial community structure in patients with recurrent Clostridioides difficile infection?
+
+Null Hypothesis (H₀):
+There is no significant change in gut microbiota beta diversity after RBX2660 treatment, and microbial communities remain distinct from donor microbiota.
+
+Alternative Hypothesis (H₁):
+RBX2660 treatment significantly shifts the gut microbiota composition of patients, making them more similar to donor microbiota, particularly in successfully treated individuals.
+
+
+<span style="color: red;">
+How does RBX2660 treatment affect gut microbial community structure in patients with recurrent Clostridioides difficile infection?
+
+Null Hypothesis (H₀):
+There is no significant change in gut microbiota beta diversity after RBX2660 treatment, and microbial communities remain distinct from donor microbiota.
+
+Alternative Hypothesis (H₁):
+RBX2660 treatment significantly shifts the gut microbiota composition of patients, making them more similar to donor microbiota, particularly in successfully treated individuals.
+
+This study involves both abundance changes and phylogenetic changes, mainly using Bray-Curtis and Weighted UniFrac to detect changes in the β-diversity of the intestinal flora after RBX2660 treatment.</span>
+
+
+# 1. Load in the data 
+```{r load-data}
+# Load your cleaned, midpoint-rooted phyloseq object
+load("data/04_PhylogeneticTree/midpoint_rooted_physeq.RData")
+
+# Intuition check
+midpoint_rooted_physeq
+
+# Intuition check on sequencing depth: What's the minimum number of reads per sample?
+min(sample_sums(midpoint_rooted_physeq))
+```
+
+
+## Remove outlier sample
+```{r rm-outlier}
+# No known outliers in RBX2660 study, so we will NOT remove any samples.
+# Instead, we just create the metadata dataframe.
+
+# Create Metadata_df
+metadata_df <- 
+  midpoint_rooted_physeq %>%
+  sample_data() %>%
+  data.frame()
+
+# How many samples?
+nrow(metadata_df)
+
+# Preview metadata
+head(metadata_df)
+```
+
+
+# Normalizing the Read Depth 
+
+## 2. Explore the Raw Read Counts 
+```{r explore-read-counts, fig.width=6, fig.height=3}
+# Calculate sequencing depth per sample
+raw_TotalSeqs_df <- 
+  midpoint_rooted_physeq %>%
+  sample_sums() %>%
+  data.frame()
+
+# Quick look
+head(raw_TotalSeqs_df)
+min(raw_TotalSeqs_df)
+
+# Rename the column
+colnames(raw_TotalSeqs_df)[1] <- "TotalSeqs"
+
+# Add a new column: number of ASVs per sample (non-normalized)
+raw_TotalSeqsASVs_df <- 
+  raw_TotalSeqs_df %>%
+  mutate(num_ASVs = colSums(otu_table(midpoint_rooted_physeq) > 0))
+
+# Plot 1: Histogram of sequencing depth
+rawSeq_histogram <- 
+  raw_TotalSeqsASVs_df %>%
+  ggplot(aes(x = TotalSeqs)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "black") +
+  labs(title = "Raw Sequencing Depth Histogram", x = "Number of Reads", y = "Number of Samples") +
+  theme_bw()
+
+# Plot 2: Scatter plot of total reads vs number of ASVs
+rawSeq_vs_numASV_plot <- 
+  raw_TotalSeqsASVs_df %>%
+  ggplot(aes(x = num_ASVs, y = TotalSeqs)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Read Depth vs. Number of ASVs", x = "Number of ASVs", y = "Number of Reads") +
+  theme_bw()
+
+# Test correlation: is sequencing depth correlated with ASV richness?
+summary(lm(TotalSeqs ~ num_ASVs, data = raw_TotalSeqsASVs_df))
+
+# Plot together
+rawSeq_histogram + rawSeq_vs_numASV_plot +
+  patchwork::plot_annotation(tag_levels = "A")
+```
+
+
+<span style="color: red;">
+We chose to normalize sequencing depth using scaling rather than rarefaction.  
+Scaling preserves all reads and maintains the original abundance structure of the microbial communities, which is critical for abundance-sensitive analyses like Bray-Curtis and Weighted UniFrac.  
+The minimum sequencing depth across samples was 3827 reads, which is sufficient for reliable β-diversity comparisons after scaling.  
+Thus, scaling allows us to accurately compare microbial community differences without losing ecological information.</span>
+
+
+# 3. Scale Read Counts 
+```{r scale-reads, fig.width=6, fig.height=3}
+
+# Scaling sequencing reads (preserving abundance structure)
+
+# Check the minimum sequencing depth before scaling
+min(sample_sums(midpoint_rooted_physeq))
+
+# Scale the reads
+scaled_physeq <- 
+  midpoint_rooted_physeq %>%
+  scale_reads(round = "matround")
+
+# Quick look at scaled object
+scaled_physeq
+
+# Confirm sequencing depth after scaling
+scaled_TotalSeqs_df <- 
+  scaled_physeq %>%
+  sample_sums() %>%
+  data.frame()
+
+# Rename the column
+colnames(scaled_TotalSeqs_df)[1] <- "TotalSeqs"
+
+# Add a column: number of ASVs per sample
+scaled_TotalSeqsASVs_df <- 
+  scaled_TotalSeqs_df %>%
+  mutate(num_ASVs = colSums(otu_table(scaled_physeq) > 0))  
+
+# Plot 1: Histogram of scaled sequencing depth 
+scaledSeq_histogram <- 
+  scaled_TotalSeqs_df %>%
+  ggplot(aes(x = TotalSeqs)) +
+  geom_histogram(bins = 50, fill = "seagreen3", color = "black") +
+  labs(title = "Scaled Sequencing Depth Histogram", x = "Number of Reads", y = "Number of Samples") +
+  scale_x_continuous(limits = c(0, 20000)) +
+  theme_bw()
+
+# Plot 2: Scaled Reads vs Number of ASVs
+scaledSeq_vs_numASV_plot <- 
+  scaled_TotalSeqsASVs_df %>%
+  ggplot(aes(x = num_ASVs, y = TotalSeqs)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "firebrick") +
+  scale_y_continuous(limits = c(min_y, max_y)) +
+  theme_bw() +
+  labs(title = "Scaled: Number of ASVs vs Sequencing Depth", x = "Number of ASVs", y = "Number of Reads")
+
+# Plot together
+scaledSeq_histogram + scaledSeq_vs_numASV_plot +
+  patchwork::plot_annotation(tag_levels = "A")
+
+
+```
+
+
+<span style="color: red;"> After scaling the read counts, the total number of sequences across all samples is highly uniform, ranging from 3822 to 3835 reads. During scaling, a small proportion of low-abundance ASVs were removed (1160 taxa retained from 1207 taxa before scaling). The relationship between sequencing depth and ASV richness was further minimized after scaling, indicating that sample diversity is no longer confounded by sequencing effort. </span>
+
+
+```{r fix-sample-name-and-group}
+# Fix and Update Sample Metadata in scaled_physeq
+# -- Replace sample_data using metadata directly --
+
+# 1. Load metadata
+metadata <- read.csv("data/metadata.csv")
+
+# 2. Prepare metadata: add Group
+metadata_fixed <- 
+  metadata %>%
+  mutate(Group = sapply(SampleName, assign_group)) %>%
+  select(Run, SampleName, Group)  # Only keep needed columns
+
+# 3. Match and arrange metadata to match phyloseq sample order
+# (Row names must match the order and names of samples in phyloseq)
+
+# First check sample names
+phyloseq_samples <- sample_names(scaled_physeq)
+
+# Filter metadata to only those in phyloseq
+metadata_final <- 
+  metadata_fixed %>%
+  filter(Run %in% phyloseq_samples) %>%
+  column_to_rownames(var = "Run")  # Run IDs must become rownames
+
+# Check that rows match!
+stopifnot(all(rownames(metadata_final) %in% phyloseq_samples))
+
+# 4. Assign metadata into scaled_physeq
+sample_data(scaled_physeq) <- sample_data(metadata_final)
+
+# 5. Quick Check
+sample_metadata_check <- sample_data(scaled_physeq) %>% data.frame()
+head(sample_metadata_check)
+
+# Check group distribution
+sample_metadata_check %>%
+  group_by(Group) %>%
+  summarise(n_samples = n()) %>%
+  arrange(desc(n_samples))
+
+
+```
+
+
+# 4. Calculating dissimilarity
+```{r calc-dissimilarity}
+# Based on scaled_physeq (already normalized sequencing depth)
+
+# Calculate Sorensen Dissimilarity (presence/absence based)
+sorensen_dist <- phyloseq::distance(scaled_physeq, method = "bray", binary = TRUE)
+
+# Quick check
+class(sorensen_dist)
+str(sorensen_dist)
+
+# Calculate Bray-Curtis Dissimilarity (abundance-weighted)
+bray_dist <- phyloseq::distance(scaled_physeq, method = "bray", binary = FALSE)
+
+# Quick check
+class(bray_dist)
+str(bray_dist)
+
+# Calculate Unweighted UniFrac Dissimilarity (phylogeny + presence/absence)
+unweighted_unifrac_dist <- phyloseq::distance(scaled_physeq, method = "unifrac", weighted = FALSE)
+
+# Quick check
+class(unweighted_unifrac_dist)
+str(unweighted_unifrac_dist)
+
+# Calculate Weighted UniFrac Dissimilarity (phylogeny + abundance-weighted)
+weighted_unifrac_dist <- phyloseq::distance(scaled_physeq, method = "unifrac", weighted = TRUE)
+
+# Quick check
+class(weighted_unifrac_dist)
+str(weighted_unifrac_dist)
+
+# Save distance matrices for later use
+save(sorensen_dist, bray_dist, unweighted_unifrac_dist, weighted_unifrac_dist, 
+     file = "data/06_Ordination/beta_diversity_distances.RData")
+```
+
+
+<span style="color: red;">
+For our scientific question - How does RBX2660 treatment alter the gut microbiome structure in patients with recurrent C. difficile infection? - Bray-Curtis and Weighted UniFrac are the most appropriate dissimilarity metrics.
+
+Bray-Curtis is able to capture changes in the relative abundance of microbial taxa, which is critical because successful RBX2660 treatment is expected to not only introduce new taxa but also restore the abundance balance of existing beneficial microbes.
+
+Weighted UniFrac combines abundance and phylogenetic relationships, allowing us to test whether the microbiota of treated patients is more similar to the donor microbiota not only in terms of species abundance, but also in terms of evolutionary lineage structure.
+
+In contrast:
+
+Sorensen and Unweighted UniFrac focus only on presence/absence, ignoring important changes in the dominance or suppression of specific microbiota, and therefore may miss more subtle but biologically meaningful changes after treatment.
+
+Therefore, Bray-Curtis and Weighted UniFrac best capture the microbiome restoration process targeted by RBX2660 therapy.
+</span>
+
+
+## Sorensen
+```{r PERMANOVA-categorical-sorensen}
+# Filter the phyloseq object to key groups only
+subset_physeq <- subset_samples(scaled_physeq, Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7"))
+
+# Recalculate Sorensen dissimilarity matrix for subset
+sorensen_dist_subset <- phyloseq::distance(subset_physeq, method = "bray", binary = TRUE)
+
+# Then run adonis2 on the filtered subset
+adonis2(sorensen_dist_subset ~ Group, data = sample_data(subset_physeq) %>% data.frame(), permutations = 9999)
+
+# PERMANOVA using Sorensen dissimilarity
+# Presence/Absence only
+
+# 1. Model testing by terms (sensitive to order)
+sorensen_adonis_terms <- adonis2(
+  sorensen_dist ~ Group,
+  data = sample_data(scaled_physeq) %>% data.frame(),
+  permutations = 9999,
+  by = "terms"
+)
+sorensen_adonis_terms
+
+# 2. Model testing by margin (adjusting for other terms)
+sorensen_adonis_margin <- adonis2(
+  sorensen_dist ~ Group,
+  data = sample_data(scaled_physeq) %>% data.frame(),
+  permutations = 9999,
+  by = "margin"
+)
+sorensen_adonis_margin
+
+```
+
+
+<span style="color: red;">
+The PERMANOVA based on Sorensen dissimilarity (presence/absence) revealed significant differences in microbial community composition across treatment groups (adonis2, p < 0.0001, R² = 34.6% for subset analysis; R² = 28.9% for full dataset).
+
+These results suggest that RBX2660 treatment induces shifts in the **presence or absence** of microbial taxa in the gut microbiome. In other words, not only do abundances change, but new microbial taxa are gained and/or lost during treatment and recovery.
+
+The relatively high R² values indicate that treatment stage (e.g., baseline, post-treatment days) is a major factor structuring gut microbiota composition.
+
+However, Sorensen dissimilarity only captures membership changes without accounting for abundance. Thus, to fully understand the treatment effects, we next examine abundance-weighted metrics such as Bray-Curtis and Weighted UniFrac.
+</span>
+
+
+## Bray-Curtis
+```{r PERMANOVA-categorical-bray}
+# PERMANOVA using Bray-Curtis dissimilarity
+# Focus on abundance-weighted community differences
+
+# Subset to key groups only
+subset_physeq <- subset_samples(scaled_physeq, Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7"))
+
+# Recalculate Bray-Curtis distance on subset
+bray_dist_subset <- phyloseq::distance(subset_physeq, method = "bray", binary = FALSE)
+
+# 1. Run adonis2 by terms (sensitive to order)
+bray_adonis_terms <- adonis2(
+  bray_dist_subset ~ Group,
+  data = sample_data(subset_physeq) %>% data.frame(),
+  permutations = 9999,
+  by = "terms"
+)
+bray_adonis_terms
+
+# 2. Run adonis2 by margin (adjusted p-values)
+bray_adonis_margin <- adonis2(
+  bray_dist_subset ~ Group,
+  data = sample_data(subset_physeq) %>% data.frame(),
+  permutations = 9999,
+  by = "margin"
+)
+bray_adonis_margin
+
+```
+
+<span style="color: red;">
+The PERMANOVA based on Bray-Curtis dissimilarity (abundance-weighted) revealed significant differences in gut microbial community structure across treatment groups (adonis2, p < 0.0001, R² = 29.4%).
+
+Compared to the Sorensen analysis (which focuses on presence/absence), Bray-Curtis captures shifts in the **relative abundances** of taxa between groups.
+
+The result indicates that not only were new taxa gained or lost after RBX2660 treatment, but also the relative abundances of existing microbial populations changed substantially.
+
+The relatively high R² and strong F-statistic support the conclusion that RBX2660 therapy drives major reorganization of gut microbiota structure at the level of both presence/absence and abundance.
+
+Thus, these results provide compelling evidence that RBX2660 significantly reshapes the gut microbiome composition in patients with recurrent C. difficile infection.
+</span>
+
+
+## Sorensen
+```{r betadisper-sorensen}
+# Subset phyloseq object ---
+subset_physeq <- subset_samples(scaled_physeq, Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7"))
+
+# Calculate Sorensen distance matrix ---
+sorensen_dist_subset <- phyloseq::distance(subset_physeq, method = "bray", binary = TRUE)
+
+# Extract metadata for subset ---
+metadata_subset <- sample_data(subset_physeq) %>% data.frame()
+
+# Betadisper analysis ---
+
+# Test by Group 
+dispr_sorensen_group <- betadisper(sorensen_dist_subset, metadata_subset$Group)
+
+# permutest significance testing
+permutest(dispr_sorensen_group, permutations = 9999)
+
+# summary
+summary(dispr_sorensen_group)
+
+# Visualize
+library(ggplot2)
+boxplot(dispr_sorensen_group, main = "Distance to Centroid by Group (Sorensen)")
+
+```
+
+
+## Bray-Curtis
+```{r betadisper-bray}
+# Subset phyloseq object ---
+subset_physeq <- subset_samples(scaled_physeq, Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7"))
+
+# Calculate Bray-Curtis distance matrix ---
+bray_dist_subset <- phyloseq::distance(subset_physeq, method = "bray", binary = FALSE)
+
+# Extract metadata for subset ---
+metadata_subset <- sample_data(subset_physeq) %>% data.frame()
+
+# Betadisper analysis ---
+
+# Test by Group 
+dispr_bray_group <- betadisper(bray_dist_subset, metadata_subset$Group)
+
+# permutest significance testing
+permutest(dispr_bray_group, permutations = 9999)
+
+# Visualization
+boxplot(dispr_bray_group, main = "Distance to Centroid by Group (Bray-Curtis)")
+```
+
+<span style="color: red;">
+
+We tested the homogeneity of group dispersions using the betadisper() and permutest() functions for both Sorensen and Bray-Curtis distances.
+
+- For Sorensen dissimilarity (presence/absence), the dispersion test was significant (p < 0.0001), indicating that the variability of microbial communities within groups differs significantly.  
+- For Bray-Curtis dissimilarity (abundance-weighted), the dispersion test was also significant (p < 0.0001), suggesting heterogeneity of variance across groups.
+
+These results mean that there are real differences in how variable the microbiota are within different groups (e.g., Donor, RI0, RI7, SI0, SI7).  
+Thus, some of the differences detected by PERMANOVA could partly arise from differences in within-group variability rather than only differences in group centroids.
+
+</span>
+
+
+
+<span style="color: red;">
+
+Given that both PERMANOVA and Betadisper tests were significant, we must interpret the observed shifts in microbiota composition after RBX2660 treatment with caution.
+
+- The PERMANOVA tests confirmed significant differences in microbiota structure between donor and patient groups (p < 0.0001 for both Sorensen and Bray-Curtis distances).
+- However, the significant betadisper results indicate that these differences could be influenced both by shifts in community centroids (true compositional differences) and by changes in within-group dispersion (community variability).
+
+Biological interpretation:
+RBX2660 treatment likely drives genuine changes in gut microbial composition, moving patient communities closer to donor profiles.  
+However, the treatment may also cause changes in the consistency of microbial communities within patient groups — potentially reflecting biological heterogeneity in patient responses to therapy.
+
+To strengthen these conclusions, we will visualize ordination plots (PCoA and NMDS) to check if group centroids are truly separated.
+
+</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

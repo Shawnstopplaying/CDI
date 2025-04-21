@@ -1,5 +1,5 @@
 ---
-title: "Biodiversity"
+title: "Within-Sample (Alpha) Diversity"
 author: "Shawn Xinyu Wang"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
