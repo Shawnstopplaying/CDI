@@ -234,7 +234,7 @@ scaledSeq_vs_numASV_plot <-
   ggplot(aes(x = num_ASVs, y = TotalSeqs)) +
   geom_point() +
   geom_smooth(method = "lm", color = "firebrick") +
-  scale_y_continuous(limits = c(min_y, max_y)) +
+  scale_y_continuous(limits = c(3800, 3850)) +
   theme_bw() +
   labs(title = "Scaled: Number of ASVs vs Sequencing Depth", x = "Number of ASVs", y = "Number of Reads")
 
@@ -252,6 +252,7 @@ scaledSeq_histogram + scaledSeq_vs_numASV_plot +
 ```{r fix-sample-name-and-group}
 # Fix and Update Sample Metadata in scaled_physeq
 # -- Replace sample_data using metadata directly --
+source("code/assign_group.R")
 
 # 1. Load metadata
 metadata <- read.csv("data/metadata.csv")
@@ -517,6 +518,300 @@ However, the treatment may also cause changes in the consistency of microbial co
 To strengthen these conclusions, we will visualize ordination plots (PCoA and NMDS) to check if group centroids are truly separated.
 
 </span>
+
+
+# 6a. PCoA: Principal Coordinates Analysis
+```{r pcoa-plots, fig.height=3.5, fig.width=7}
+
+# Subset data (With Donor and Without Donor) ---
+subset_physeq_with_donor <- subset_samples(scaled_physeq, Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7"))
+subset_physeq_nodonor <- subset_samples(scaled_physeq, Group %in% c("RI0", "RI7", "SI0", "SI7"))
+
+# Ordinate PCoA ---
+subset_soren_pcoa_with_donor <- ordinate(subset_physeq_with_donor, method = "PCoA", distance = "bray", binary = TRUE)
+subset_bray_pcoa_with_donor  <- ordinate(subset_physeq_with_donor, method = "PCoA", distance = "bray", binary = FALSE)
+
+subset_soren_pcoa_nodonor <- ordinate(subset_physeq_nodonor, method = "PCoA", distance = "bray", binary = TRUE)
+subset_bray_pcoa_nodonor  <- ordinate(subset_physeq_nodonor, method = "PCoA", distance = "bray", binary = FALSE)
+
+# Define colors and shapes ---
+group_colors_with_donor <- c("Donor"="#66C2A5", "RI0"="#87CEFA", "RI7"="#000080", "SI0"="#FDB863", "SI7"="#FF4500")
+group_shapes_with_donor <- c("Donor"=16, "RI0"=17, "RI7"=17, "SI0"=15, "SI7"=15)
+
+group_colors_nodonor <- c("RI0"="#87CEFA", "RI7"="#000080", "SI0"="#FDB863", "SI7"="#FF4500")
+group_shapes_nodonor <- c("RI0"=17, "RI7"=17, "SI0"=15, "SI7"=15)
+
+# PCoA Plots WITH Donor ---
+sorensen_pcoa_plot_with_donor <- plot_ordination(
+  subset_physeq_with_donor, subset_soren_pcoa_with_donor, color = "Group", shape = "Group"
+) +
+  geom_point(size=3, alpha=0.8) +
+  scale_color_manual(values = group_colors_with_donor) +
+  scale_shape_manual(values = group_shapes_with_donor) +
+  labs(title = "PCoA (Sorensen) —With Donor") +
+  theme_bw()
+
+bray_pcoa_plot_with_donor <- plot_ordination(
+  subset_physeq_with_donor, subset_bray_pcoa_with_donor, color = "Group", shape = "Group"
+) +
+  geom_point(size=3, alpha=0.8) +
+  scale_color_manual(values = group_colors_with_donor) +
+  scale_shape_manual(values = group_shapes_with_donor) +
+  labs(title = "PCoA (Bray-Curtis) —With Donor") +
+  theme_bw()
+
+# PCoA Plots WITHOUT Donor ---
+sorensen_pcoa_plot_nodonor <- plot_ordination(
+  subset_physeq_nodonor, subset_soren_pcoa_nodonor, color = "Group", shape = "Group"
+) +
+  geom_point(size=3, alpha=0.8) +
+  scale_color_manual(values = group_colors_nodonor) +
+  scale_shape_manual(values = group_shapes_nodonor) +
+  labs(title = "PCoA (Sorensen) —No Donor") +
+  theme_bw()
+
+bray_pcoa_plot_nodonor <- plot_ordination(
+  subset_physeq_nodonor, subset_bray_pcoa_nodonor, color = "Group", shape = "Group"
+) +
+  geom_point(size=3, alpha=0.8) +
+  scale_color_manual(values = group_colors_nodonor) +
+  scale_shape_manual(values = group_shapes_nodonor) +
+  labs(title = "PCoA (Bray-Curtis) —No Donor") +
+  theme_bw()
+
+library(patchwork)
+
+# Combine 4 PCoA plots: Sorensen & Bray, With Donor & No Donor
+(sorensen_pcoa_plot_with_donor + bray_pcoa_plot_with_donor) /
+(sorensen_pcoa_plot_nodonor + bray_pcoa_plot_nodonor) +
+  patchwork::plot_layout(guides = "collect") +
+  patchwork::plot_annotation(tag_levels = "A", title = "PCoA Ordination of Microbial Communities")
+
+```
+
+<span style="color: red;">
+Based on the first PCoA plot (including Donor group)
+In the PCoA plots including Donor samples (Sorensen and Bray-Curtis metrics), a clear and biologically meaningful pattern emerges:
+
+RI0 and SI0 samples (pre-treatment) are clustered far away from Donor samples, indicating that patients with recurrent C. difficile infection harbor gut microbiota highly distinct from healthy donors.
+
+RI7 and SI7 samples (post-treatment) shift closer toward the Donor cluster along the first principal coordinate (Axis 1), suggesting that RBX2660 treatment successfully shifted the gut microbiome composition toward a donor-like, healthy community structure.
+
+This directional shift is consistent across both presence/absence (Sorensen) and abundance-weighted (Bray-Curtis) metrics.
+
+Based on the second PCoA plot (after removing Donor group)
+After removing Donor samples and re-plotting the PCoA:
+
+The patient groups (RI0, RI7, SI0, SI7) are more evenly distributed across the ordination space.
+
+RI0 vs RI7 and SI0 vs SI7 still exhibit some separation, particularly along Axis 1, but the patterns are less stark compared to when Donor samples were present.
+
+The removal of the dominant Donor cluster allows for finer-grained exploration of patient-to-patient variability, but also highlights heterogeneity in patient responses to RBX2660 treatment, especially within the RI group.
+</span>
+
+
+## 6b. NMDS: Non-Metric Multidimensional Scaling 
+```{r soren-nmds}
+
+# Subset data (With Donor and Without Donor) ---
+subset_physeq_with_donor <- subset_samples(scaled_physeq, Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7"))
+subset_physeq_nodonor <- subset_samples(scaled_physeq, Group %in% c("RI0", "RI7", "SI0", "SI7"))
+
+# Ordinate NMDS ---
+subset_soren_nmds_with_donor <- ordinate(subset_physeq_with_donor, method = "NMDS", distance = "bray", binary = TRUE)
+subset_bray_nmds_with_donor  <- ordinate(subset_physeq_with_donor, method = "NMDS", distance = "bray", binary = FALSE)
+
+subset_soren_nmds_nodonor <- ordinate(subset_physeq_nodonor, method = "NMDS", distance = "bray", binary = TRUE)
+subset_bray_nmds_nodonor  <- ordinate(subset_physeq_nodonor, method = "NMDS", distance = "bray", binary = FALSE)
+
+# Define colors and shapes ---
+group_colors_with_donor <- c("Donor"="#66C2A5", "RI0"="#87CEFA", "RI7"="#000080", "SI0"="#FDB863", "SI7"="#FF4500")
+group_shapes_with_donor <- c("Donor"=16, "RI0"=17, "RI7"=17, "SI0"=15, "SI7"=15)
+
+group_colors_nodonor <- c("RI0"="#87CEFA", "RI7"="#000080", "SI0"="#FDB863", "SI7"="#FF4500")
+group_shapes_nodonor <- c("RI0"=17, "RI7"=17, "SI0"=15, "SI7"=15)
+
+# NMDS Plots WITH Donor ---
+sorensen_nmds_plot_with_donor <- plot_ordination(
+  subset_physeq_with_donor, subset_soren_nmds_with_donor, color = "Group", shape = "Group"
+) +
+  geom_point(size=3, alpha=0.8) +
+  scale_color_manual(values = group_colors_with_donor) +
+  scale_shape_manual(values = group_shapes_with_donor) +
+  labs(title = paste0("NMDS (Sorensen) —With Donor | Stress: ", round(subset_soren_nmds_with_donor$stress, 3))) +
+  theme_bw()
+
+bray_nmds_plot_with_donor <- plot_ordination(
+  subset_physeq_with_donor, subset_bray_nmds_with_donor, color = "Group", shape = "Group"
+) +
+  geom_point(size=3, alpha=0.8) +
+  scale_color_manual(values = group_colors_with_donor) +
+  scale_shape_manual(values = group_shapes_with_donor) +
+  labs(title = paste0("NMDS (Bray-Curtis) —With Donor | Stress: ", round(subset_bray_nmds_with_donor$stress, 3))) +
+  theme_bw()
+
+# NMDS Plots WITHOUT Donor ---
+sorensen_nmds_plot_nodonor <- plot_ordination(
+  subset_physeq_nodonor, subset_soren_nmds_nodonor, color = "Group", shape = "Group"
+) +
+  geom_point(size=3, alpha=0.8) +
+  scale_color_manual(values = group_colors_nodonor) +
+  scale_shape_manual(values = group_shapes_nodonor) +
+  labs(title = paste0("NMDS (Sorensen) -No Donor | Stress: ", round(subset_soren_nmds_nodonor$stress, 3))) +
+  theme_bw()
+
+bray_nmds_plot_nodonor <- plot_ordination(
+  subset_physeq_nodonor, subset_bray_nmds_nodonor, color = "Group", shape = "Group"
+) +
+  geom_point(size=3, alpha=0.8) +
+  scale_color_manual(values = group_colors_nodonor) +
+  scale_shape_manual(values = group_shapes_nodonor) +
+  labs(title = paste0("NMDS (Bray-Curtis) -No Donor | Stress: ", round(subset_bray_nmds_nodonor$stress, 3))) +
+  theme_bw()
+
+# Combine 4 NMDS plots: Sorensen & Bray, With Donor & No Donor
+library(patchwork)
+
+(sorensen_nmds_plot_with_donor + bray_nmds_plot_with_donor) /
+(sorensen_nmds_plot_nodonor + bray_nmds_plot_nodonor) +
+  patchwork::plot_layout(guides = "collect") +
+  patchwork::plot_annotation(tag_levels = "A", title = "NMDS Ordination of Microbial Communities")
+
+
+```
+
+<span style="color: red;">
+Using NMDS ordination, we explored patterns in beta diversity among key groups (Donor, RI0, RI7, SI0, SI7).
+
+In the first NMDS plot (with Donor samples included):
+
+Donor samples clustered very tightly, indicating low within-group variability among healthy donors.
+
+Patients at baseline (RI0 and SI0) were clearly separated from the Donor cluster, reflecting microbiome disruption before treatment.
+
+After treatment, SI7 samples shifted markedly toward the Donor cluster, with relatively low within-group dispersion.
+
+RI7 samples also moved toward the Donor cluster but exhibited greater dispersion, suggesting heterogeneous treatment responses and possible incomplete or failed microbiota restoration in recurrent cases.
+
+Stress values (0.132 for Sorensen and 0.141 for Bray-Curtis) were low, supporting reliable interpretation.
+
+In the second NMDS plot (Donor samples excluded):
+
+The overall trend remained: SI7 samples separated from SI0, moving toward a healthier community structure.
+
+RI7 samples displayed greater overlap with RI0 samples and greater spread, highlighting higher variability and incomplete recovery among patients who later experienced recurrence.
+
+Stress values (~0.195) were higher but still acceptable for ecological interpretation, with caution.
+
+Biological Conclusion:
+The NMDS analyses, combined with clinical outcomes, suggest that RBX2660 treatment led to a more complete and consistent microbiota restoration in successfully treated (SI7) patients, while recurrent infection patients (RI7) showed partial or variable microbiota recovery.
+Including donor samples enhances the ability to visualize treatment-induced shifts toward a healthy gut community.
+</span>
+
+
+## All ordinations together!
+```{r ordinations, fig.width=7, fig.height=6}
+(
+  (sorensen_pcoa_plot_with_donor + bray_pcoa_plot_with_donor) /
+  (sorensen_pcoa_plot_nodonor + bray_pcoa_plot_nodonor) /
+  (sorensen_nmds_plot_with_donor + bray_nmds_plot_with_donor) /
+  (sorensen_nmds_plot_nodonor + bray_nmds_plot_nodonor)
+) +
+  patchwork::plot_layout(guides = "collect") +
+  patchwork::plot_annotation(
+    title = "Beta Diversity Ordination of Gut Microbial Communities",
+    subtitle = "PCoA and NMDS (Sorensen and Bray-Curtis), With and Without Donor Samples",
+    tag_levels = "A",
+    theme = theme(plot.title = element_text(size=16, face="bold"),
+                  plot.subtitle = element_text(size=12))
+  )
+
+```
+
+
+## All ordinations together! Only bray
+```{r ordinations-bray, fig.width=7, fig.height=6}
+
+(
+  bray_pcoa_plot_with_donor + bray_pcoa_plot_nodonor +
+  bray_nmds_plot_with_donor + bray_nmds_plot_nodonor
+) +
+  patchwork::plot_layout(ncol = 2, guides = "collect") +
+  patchwork::plot_annotation(
+    title = "Bray-Curtis Beta Diversity Ordination (PCoA + NMDS)",
+    subtitle = "With and Without Donor Samples",
+    tag_levels = "A",
+    theme = theme(
+      plot.title = element_text(size=16, face="bold"),
+      plot.subtitle = element_text(size=12)
+    )
+  )
+```
+
+<span style="color: red;">
+In this project, we plotted both PCoA and NMDS ordinations using Bray-Curtis distances, with and without Donor samples included.
+
+Overall comparison:
+
+PCoA plots show a very clear directional shift along Axis 1.
+
+When Donor samples are included, pre-treatment samples (RI0, SI0) are clearly separated from Donor, and post-treatment samples (RI7, SI7) shift closer toward the Donor cluster.
+
+After removing Donor samples, the separation between SI0 and SI7 remains somewhat clear, while RI0 and RI7 are more intermixed.
+
+NMDS plots also reveal the same biological trend, but:
+
+NMDS spreads the samples out differently.
+
+The structure is slightly less "compressed" than PCoA (especially along NMDS1 axis).
+
+The stress values are reasonable (~0.141 with Donor, ~0.195 without Donor), supporting acceptable interpretation, but not as tight as the PCoA representation.
+
+Which visualization works best?
+
+PCoA works better for this dataset.
+
+Reason:
+
+The first principal coordinate (Axis 1) explains a large proportion of the variance (~30%), making the horizontal shift toward the Donor cluster visually very striking.
+
+PCoA cleanly separates pre- and post-treatment samples when Donor is included.
+
+NMDS, while still valid, introduces more distortion due to its rank-based, non-metric nature, and the slightly higher stress (~0.195) suggests a bit more caution.
+
+Conclusion:
+
+PCoA is the preferred ordination method here because it provides clearer, more interpretable clustering and separation between groups.
+
+NMDS supports and validates the findings but is slightly noisier.
+
+Using both approaches together strengthens the robustness of the conclusions.
+</span>
+
+
+# Final info for Reproducibility 
+
+## Check Render Time
+```{r stop-time}
+# Take the time now that we are at the end of the script
+end_time <- Sys.time()
+end_time 
+
+# Echo the elapsed time
+elapsed_time <- round((end_time - start_time), 3)
+elapsed_time
+```
+
+## Session Information
+
+```{r session-info}
+# Ensure reproducibility with package version information
+devtools::session_info()
+```
+
+
+
+
 
 
 
