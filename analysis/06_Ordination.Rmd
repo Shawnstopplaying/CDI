@@ -242,6 +242,8 @@ scaledSeq_vs_numASV_plot <-
 scaledSeq_histogram + scaledSeq_vs_numASV_plot +
   patchwork::plot_annotation(tag_levels = "A")
 
+save(scaled_physeq, file = "data/06_Ordination/scaled_physeq.RData")
+
 
 ```
 
