@@ -18,3 +18,493 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE,
+                      fig.path = "../figures/07_Composition/")
+```
+
+## Goals
+
+In this file, we will perform compositional analysis of our scaled (normalized) gut microbiome dataset from the RBX2660 clinical trial.
+Load in the scaled/normalized phyloseq object containing ASV abundance, taxonomy, metadata, and tree.
+Calculate the relative abundances of microbial taxa at multiple taxonomic levels:
+A. Phylum
+B. Genus
+C. ASV
+Visualize taxonomic composition across patient groups (Donor, RI0, RI7, SI0, SI7) and over time.
+
+## Inputs
+
+We will use the scaled_physeq.RData object, generated in analysis/06_Ordination/, which contains sequencing depth-normalized data based on midpoint_rooted_physeq.RData created in analysis/04_PhylogeneticTree/.
+
+## Outputs
+
+1. Clear and informative figures showing how major microbial taxa vary across treatment groups (Donor, baseline, and post-treatment).
+2. Statistical comparisons of microbial composition across clinical groups (e.g., SI vs RI patients before and after treatment).
+
+Compositional Data Considerations
+Microbial abundance data from 16S rRNA gene sequencing are compositional in nature — that is, they represent relative proportions rather than absolute counts.
+This constraint introduces potential artifacts (e.g., false correlations) when using standard statistical methods designed for absolute data.
+It is important to keep these limitations in mind when interpreting changes in taxonomic abundances across groups.
+
+<span style="color: red;">Because microbiome data are compositional, changes in the relative abundance of one taxon necessarily affect the measured abundance of others, even if their absolute abundances remain unchanged.
+Thus, interpretation should focus on relative shifts between groups rather than assuming absolute increases or decreases in specific taxa.</span>
+
+
+# Setup 
+
+## Load Packages 
+```{r load-packages}
+# Load in the packages 
+pacman::p_load(tidyverse, devtools, DT, phyloseq, patchwork, 
+               install = FALSE)
+
+```
+
+
+## 1. Load in Scaled Phyloseq object 
+```{r load-data}
+# Load the scaled (normalized) phyloseq object
+load("data/06_Ordination/scaled_physeq.RData")
+
+# Quick look at the loaded phyloseq object
+scaled_physeq
+
+# Intuition check — check sequencing depth range after scaling
+min(sample_sums(scaled_physeq))
+range(sample_sums(scaled_physeq))
+```
+
+
+# Taxonomic Analysis!
+
+## A. Phylum 
+```{r calc-phylum-df}
+# Create a phylum-level dataframe
+phylum_df <- 
+  scaled_physeq %>%
+  # Agglomerate ASVs at the Phylum level
+  tax_glom(taxrank = "Phylum") %>%
+  # Transform to relative abundances
+  transform_sample_counts(function(x) x / sum(x)) %>%
+  # Melt into long dataframe
+  psmelt()
+
+# Inspect phylum-level abundances
+phylum_df %>%
+  group_by(Phylum) %>%
+  summarize(mean_PercAbund = round(mean(Abundance), digits = 4)) %>%
+  arrange(desc(mean_PercAbund)) %>%
+  datatable()
+
+# Identify Top 6 most abundant Phyla
+top6_phyla <- 
+  phylum_df %>%
+  group_by(Phylum) %>%
+  summarize(mean_PercAbund = mean(Abundance)) %>%
+  arrange(desc(mean_PercAbund)) %>%
+  slice_head(n = 6) %>%
+  pull(Phylum)
+```
+
+<span style="color: red;">INTERPRETATION #2:
+At this stage, we calculated the overall mean relative abundances across all samples, without yet distinguishing between Donor and patient groups (SI/RI before and after treatment).
+Across the entire dataset, the most abundant phylum was Firmicutes (71.15%), followed by Proteobacteria (12.22%) and Verrucomicrobiota (9.39%).
+Bacteroidota (4.66%) and Actinobacteriota (2.23%) were less dominant.
+This initial overview provides a sense of which phyla are most prevalent in the dataset, but further group-specific analyses are necessary to assess how RBX2660 treatment influences gut microbial composition. </span>
+
+
+```{r phylum-stacked-bar, fig.width=9, fig.height=3.5}
+source("code/assign_group.R")
+# {r phylum-stacked-bar-final, fig.width=9, fig.height=4.5}
+
+if (!"Group" %in% colnames(sample_data(scaled_physeq))) {
+  sample_data(scaled_physeq)$Group <- sapply(
+    sample_data(scaled_physeq)$SampleName,
+    assign_group
+  )
+}
+
+phylum_physeq <- scaled_physeq %>%
+  tax_glom(taxrank = "Phylum")
+
+phylum_df <- psmelt(phylum_physeq)
+
+top6_phyla <- phylum_df %>%
+  group_by(Phylum) %>%
+  summarize(mean_abund = mean(Abundance)) %>%
+  arrange(desc(mean_abund)) %>%
+  slice_head(n = 6) %>%
+  pull(Phylum)
+
+phylum_colors <- c(
+  "Firmicutes" = "#66C2A5",
+  "Proteobacteria" = "#FC8D62",
+  "Verrucomicrobiota" = "#8DA0CB",
+  "Bacteroidota" = "#E78AC3",
+  "Actinobacteriota" = "#A6D854",
+  "Desulfobacterota" = "#FFD92F"
+)
+
+phylum_df %>%
+  filter(Phylum %in% top6_phyla) %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Phylum)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  scale_fill_manual(values = phylum_colors) +
+  labs(
+    title = "Top 6 Phyla Relative Abundance across Groups",
+    x = "Group", y = "Relative Abundance"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+    legend.position = "right",
+    strip.text = element_text(face = "bold")
+  )
+
+```
+
+
+## Faceted Bar plot 
+
+```{r phylum-facet-bar, fig.width=5, fig.height=12}
+# Plot Phylum relative abundance across Groups (Unified Style)
+
+phylum_df %>%
+  filter(Phylum %in% top6_phyla) %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Phylum)) +
+  facet_wrap(~ Phylum, scales = "free_y", nrow = 2) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, color = "black") +
+  geom_jitter(width = 0.2, size = 1.5, alpha = 0.7, color = "black") +
+  scale_fill_manual(values = phylum_colors) +
+  theme_bw() +
+  labs(title = "Relative Abundance of Top 6 Phyla across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme(
+    strip.text = element_text(size = 10, face = "bold"),
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+    legend.position = "none"
+  )
+
+```
+
+<span style="color: red;">
+Interpretation #3:
+Based on the dotplot and boxplot analysis of the top 6 most abundant phyla, RBX2660 treatment appears to promote partial restoration of gut microbiota composition toward a donor-like structure.
+
+Firmicutes abundance, associated with a healthy gut, increased significantly post-treatment (especially SI7 group), suggesting treatment efficacy in some patients.
+
+Proteobacteria, a marker of dysbiosis, remained elevated in some RI7 samples, indicating incomplete recovery in recurrent cases.
+
+Verrucomicrobiota expansion in RI7 samples may reflect microbiota instability or alternative ecological states post-treatment.
+
+Bacteroidota showed moderate resilience across groups, while Actinobacteriota decreased slightly post-treatment.
+
+Desulfobacterota remained at low abundance in all groups.
+
+These patterns suggest that successful RBX2660 therapy restores Firmicutes and reduces Proteobacteria, but variability remains across patient responses, highlighting the need for individualized monitoring post-treatment.
+</span>
+
+## Firmicutes
+```{r, Firmicutes}
+group_colors <- c(
+  "Donor" = "#66C2A5",
+  "RI0" = "#87CEFA",
+  "RI7" = "#000080",
+  "SI0" = "#FDB863",
+  "SI7" = "#FF4500"
+)
+
+phylum_df %>%
+  filter(Phylum == "Firmicutes") %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Firmicutes Abundance across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+
+```
+
+
+## Proteobacteria
+```{r, Proteobacteria}
+phylum_df %>%
+  filter(Phylum == "Proteobacteria") %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Proteobacteria Abundance across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+
+```
+
+
+## Verrucomicrobiota
+```{r, Verrucomicrobiota}
+phylum_df %>%
+  filter(Phylum == "Verrucomicrobiota") %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Verrucomicrobiota Abundance across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+```
+
+
+## Desulfobacterota
+```{r, Desulfobacterota}
+phylum_df %>%
+  filter(Phylum == "Desulfobacterota") %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Desulfobacterota Abundance across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+```
+
+
+<span style="color: red;">
+
+In this study, we observed:
+
+Firmicutes showed the highest relative abundance in Donor samples, but were markedly reduced in RI0 and SI0 (pre-treatment). After RBX2660 treatment, Firmicutes levels increased, with SI7 samples showing a more complete recovery toward Donor-like profiles compared to RI7.
+
+Proteobacteria were substantially elevated in RI0 and SI0 (indicative of dysbiosis). Following treatment, SI7 samples exhibited a notable decrease in Proteobacteria abundance, while RI7 samples showed a smaller or more variable reduction, suggesting ongoing dysbiosis or delayed recovery in recurrent cases.
+
+Actinobacteriota and Bacteroidota also shifted in expected directions toward a healthier microbiota, although their restoration was more gradual.
+
+Notably, Verrucomicrobiota and Desulfobacterota showed substantial differences between RI0 and SI0 before treatment, suggesting baseline microbial composition heterogeneity across patients.
+
+Together, these results suggest that while RBX2660 treatment broadly promotes microbiota restoration, the divergence between SI7 and RI7 likely reflects not only the influence of the donor microbiota, but also host factors (such as immune status or gut environment) and pre-existing microbiota differences.
+
+Thus, successful microbiota-based therapy appears to depend on a combination of:
+
+Baseline microbiota structure,
+
+Donor microbial features,
+
+Host physiological context (immune function, gut health).
+
+This highlights the complexity and individuality of microbiota restoration following RBX2660 treatment and points to potential directions for deeper mechanistic investigations.
+</span>
+
+
+## B. Genus
+```{r genus-actino-plots, fig.width=12, fig.height=4}
+# Generate the Genus-level dataframe
+genus_df <- 
+  scaled_physeq %>%
+  tax_glom(taxrank = "Genus") %>%
+  transform_sample_counts(function(x) x / sum(x)) %>%
+  psmelt()
+```
+
+
+## Firmicutes Genera
+```{r Firmicutes-genus, fig.width=6, fig.height=6}
+
+selected_firmicutes_genus <- 
+  genus_df %>%
+  filter(Phylum == "Firmicutes") %>%
+  group_by(Genus) %>%
+  summarise(mean_abund = mean(Abundance)) %>%
+  filter(mean_abund > 0.01) %>%    
+  pull(Genus)
+
+genus_df %>%
+  filter(Phylum == "Firmicutes") %>%
+  filter(Genus %in% selected_firmicutes_genus) %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  facet_wrap(~ Genus, scales = "free_y", nrow = 4) +  # <<<  nrow = 3 or 4
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Firmicutes Genera (>1% Mean Abundance) across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+    strip.text = element_text(face = "bold", size = 10),
+    legend.position = "none"
+  )
+
+```
+
+<span style="color: red;">
+Brief Summary of Firmicutes Genera Changes:
+
+In Donor samples: Classic beneficial genera such as Faecalibacterium, Blautia, Roseburia, and Anaerostipes were highly abundant.
+
+After RI7 treatment: These beneficial genera did not recover effectively. Instead, there was a slight increase in potential pathogenic genera like [Ruminococcus] gnavus group and Lachnoclostridium.
+
+After SI7 treatment: The key beneficial genera, including Faecalibacterium, Blautia, and Roseburia, were largely restored.
+</span>
+
+
+## Proteobacteria Genera
+```{r Proteobacteria-genus, fig.width=6, fig.height=6}
+selected_proteo_genus <- 
+  genus_df %>%
+  filter(Phylum == "Proteobacteria") %>%
+  group_by(Genus) %>%
+  summarise(mean_abund = mean(Abundance)) %>%
+  filter(mean_abund > 0.005) %>%    
+  pull(Genus)
+
+genus_df %>%
+  filter(Phylum == "Proteobacteria") %>%
+  filter(Genus %in% selected_proteo_genus) %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  facet_wrap(~ Genus, scales = "free_y", nrow = 1) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Proteobacteria Genera (>0.5% Mean Abundance) across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+    strip.text = element_text(face = "bold", size = 10),
+    legend.position = "none"
+  )
+```
+
+<span style="color: red;">
+Brief Summary of Proteobacteria Genera Changes:
+
+In Donor samples, Escherichia-Shigella, Klebsiella, and Pluralibacter were nearly absent.
+
+In RI patients, these potentially pathogenic genera were highly abundant at baseline (RI0) and showed only partial reductions after treatment (RI7).
+
+In SI patients, these harmful genera were substantially reduced after treatment (SI7), approaching levels seen in healthy Donors.
+
+This suggests that successful microbiota restoration (as seen in SI patients) effectively suppresses opportunistic pathogens in the gut.
+</span>
+
+
+## Verrucomicrobiota Genera
+```{r Verrucomicrobiota-genus, fig.width=6, fig.height=6}
+selected_verruco_genus <- 
+  genus_df %>%
+  filter(Phylum == "Verrucomicrobiota") %>%
+  group_by(Genus) %>%
+  summarise(mean_abund = mean(Abundance)) %>%
+  pull(Genus)
+
+genus_df %>%
+  filter(Phylum == "Verrucomicrobiota") %>%
+  filter(Genus %in% selected_verruco_genus) %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  facet_wrap(~ Genus, scales = "free_y", nrow = 2) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Verrucomicrobiota Genera across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+    strip.text = element_text(face = "bold", size = 10),
+    legend.position = "none"
+  )
+```
+
+
+## Desulfobacterota Genera
+```{r Desulfobacterota-genus, fig.width=6, fig.height=6}
+
+selected_desulfo_genus <- 
+  genus_df %>%
+  filter(Phylum == "Desulfobacterota") %>%
+  group_by(Genus) %>%
+  summarise(mean_abund = mean(Abundance)) %>%
+  pull(Genus)
+
+genus_df %>%
+  filter(Phylum == "Desulfobacterota") %>%
+  filter(Genus %in% selected_desulfo_genus) %>%
+  filter(Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  facet_wrap(~ Genus, scales = "free_y", nrow = 1) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Desulfobacterota Genera across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+    strip.text = element_text(face = "bold", size = 10),
+    legend.position = "none"
+  )
+
+```
+
+<span style="color: red;">
+Summary of Akkermansia, Bilophila, and Desulfovibrio Pre-treatment Differences
+Before treatment, significant microbial differences were already apparent between the RI0 and SI0 groups:
+
+Akkermansia exhibited higher baseline abundance in the RI0 group compared to SI0 and Donor groups. Although Akkermansia is sometimes considered beneficial, excessive mucin degradation can impair gut barrier function, potentially predisposing patients to treatment failure.
+
+Bilophila and Desulfovibrio, two genera associated with hydrogen sulfide production and inflammatory processes, were also elevated in RI0 compared to SI0 and Donor samples.
+
+After treatment:
+
+In the RI7 group, these genera remained at abnormal levels or even increased further, suggesting a persistent dysbiotic signature.
+
+In contrast, the SI7 group successfully suppressed these potentially pathogenic genera, resembling the healthy donor microbiota.
+
+Conclusion:
+The higher pre-treatment levels of Akkermansia, Bilophila, and Desulfovibrio in the RI group may have contributed to an unfavorable gut environment, impairing the engraftment and stabilization of the transplanted microbiota, ultimately leading to treatment failure.
+</span>
+
+
+<span style="color: red;">
+At the genus level, our data revealed distinct microbial patterns associated with treatment success or failure.
+
+Firmicutes genera:
+In healthy Donors, classic beneficial genera such as Faecalibacterium, Blautia, Roseburia, and Anaerostipes were highly abundant, contributing to a healthy gut environment.
+After SI7 treatment, these beneficial Firmicutes were largely restored.
+However, after RI7 treatment, these key genera remained depleted, and instead, an increase was observed in potential pathogenic genera like [Ruminococcus] gnavus group and Lachnoclostridium.
+
+Proteobacteria genera:
+Pathogenic genera such as Escherichia-Shigella, Klebsiella, and Pluralibacter were nearly absent in Donor samples.
+In RI patients, these harmful taxa were highly enriched at baseline (RI0) and were only partially reduced after treatment (RI7).
+In contrast, SI7 samples showed effective suppression of these genera, reaching levels similar to Donors.
+
+Verrucomicrobiota and Desulfobacterota genera:
+Before treatment, the RI0 group exhibited higher levels of Akkermansia, Bilophila, and Desulfovibrio compared to SI0 and Donors.
+Although Akkermansia can be beneficial under certain conditions, overgrowth may impair gut barrier integrity.
+Bilophila and Desulfovibrio are associated with pro-inflammatory and sulfide-producing activities.
+After treatment, these genera remained elevated in RI7 but were successfully suppressed in SI7.
+
+Conclusion:
+The persistence of pathogenic genera and the failure to restore key beneficial taxa likely contributed to microbiota engraftment failure and disease recurrence in the RI group.
+In contrast, successful recovery of a beneficial genus profile (especially within Firmicutes) was observed in the SI group, closely resembling Donor microbial communities.
+</span>
+
+
+
+
+
