@@ -5,7 +5,7 @@ assign_group <- function(sample_name) {
   # Patient sample starts with A
   if (grepl("^A", sample_name)) {
     id <- as.numeric(gsub("A(\\d+)\\..*", "\\1", sample_name))   # extract patient ID
-    transplant_num <- as.numeric(gsub("A\\d+\\.(\\d+)\\..*", "\\1", sample_name)) #提取移植次数
+    transplant_num <- as.numeric(gsub("A\\d+\\.(\\d+)\\..*", "\\1", sample_name)) 
     day <- as.numeric(gsub(".*\\.(\\d+)_16S", "\\1", sample_name))  # extract day info
     
     # Single Intervention/SI group patients
@@ -18,7 +18,7 @@ assign_group <- function(sample_name) {
       if (transplant_num == 1) {
         return(ifelse(day == 0, "RI0", paste0("RI", day)))
       } else {
-        return(NA)  # 第二次移植的数据直接剔除
+        return(NA) 
       }
     }
     

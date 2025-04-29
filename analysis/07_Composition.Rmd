@@ -281,6 +281,8 @@ phylum_df %>%
 ```
 
 
+
+
 <span style="color: red;">
 
 In this study, we observed:
@@ -604,7 +606,7 @@ top_akk_asvs <- ASV_df %>%
   filter(Genus == "Akkermansia") %>%
   group_by(OTU) %>%
   summarise(mean_abund = mean(Abundance)) %>%
-  filter(mean_abund > 0.03) %>%  # 可根据需要调整阈值
+  filter(mean_abund > 0.03) %>%  
   pull(OTU)
 
 akk_plot <- ASV_df %>%

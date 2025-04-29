@@ -374,6 +374,14 @@ print(richness_shapiro)
 
 # Statistically Test Richness all groups
 ```{r statistically-test-richness-all-groups}
+group_colors_with_donor <- c(
+  "Donor" = "#66C2A5",
+  "RI0" = "#87CEFA",
+  "RI7" = "#000080",
+  "SI0" = "#FDB863",
+  "SI7" = "#FF4500"
+)
+
 obs_rich_df <- 
   iNEXT_manual_df %>%
   filter(Method == "Observed", Order.q == 0, !is.na(Group)) %>%
@@ -394,8 +402,8 @@ rich_ggboxplot <-
             color = "Group", fill = "Group", alpha = 0.3,
             outlier.shape = NA) + 
   geom_jitter(aes(color = Group), width = 0.2, size = 1.5) + 
-  scale_color_manual(values = group_colors) + 
-  scale_fill_manual(values = group_colors) + 
+  scale_color_manual(values = group_colors_with_donor) + 
+  scale_fill_manual(values = group_colors_with_donor) + 
   labs(y = "# of ASVs (Richness)", title = "Richness Differences Between Groups") + 
   stat_pvalue_manual(dunn_result, hide.ns = TRUE, tip.length = 0.01) +
   theme_bw() + 
@@ -435,8 +443,8 @@ rich_plot <-
           color = "Group", fill = "Group", alpha = 0.3,
           outlier.shape = NA) +
   geom_jitter(aes(color = Group), width = 0.2, size = 1.5) + 
-  scale_color_manual(values = group_colors) + 
-  scale_fill_manual(values = group_colors) + 
+  scale_color_manual(values = group_colors_with_donor) + 
+  scale_fill_manual(values = group_colors_with_donor) + 
   labs(y = "# of ASVs (Richness)", title = "Richness Differences Between Groups") + 
   stat_pvalue_manual(dunn_result, hide.ns = TRUE, tip.length = 0.01, step.increase = 0.01, bracket.nudge.y = 1) +
   theme_bw() + 
@@ -476,8 +484,8 @@ shannon_plot <-
           color = "Group", fill = "Group", alpha = 0.3,
           outlier.shape = NA) +
   geom_jitter(aes(color = Group), width = 0.2, size = 1.5) + 
-  scale_color_manual(values = group_colors) + 
-  scale_fill_manual(values = group_colors) + 
+  scale_color_manual(values = group_colors_with_donor) + 
+  scale_fill_manual(values = group_colors_with_donor) + 
   labs(title = "Shannon Diversity Comparison (q = 1)", y = "# of Common ASVs (Shannon)") + 
   stat_pvalue_manual(dunn_result, hide.ns = TRUE, tip.length = 0.01, step.increase = 0.01, bracket.nudge.y = 1) +
   theme_bw() + 
@@ -517,8 +525,8 @@ simpson_plot <-
           color = "Group", fill = "Group", alpha = 0.3,
           outlier.shape = NA) +
   geom_jitter(aes(color = Group), width = 0.2, size = 1.5) + 
-  scale_color_manual(values = group_colors) + 
-  scale_fill_manual(values = group_colors) + 
+  scale_color_manual(values = group_colors_with_donor) + 
+  scale_fill_manual(values = group_colors_with_donor) + 
   labs(y = "# of Dominant ASVs (Simpson)", title = "Simpson Diversity Comparison (q = 2)") + 
   stat_pvalue_manual(dunn_result, hide.ns = TRUE, tip.length = 0.01, step.increase = 0.01, bracket.nudge.y = 1) +
   theme_bw() + 
@@ -537,7 +545,7 @@ print(simpson_plot)
 # Combine richness, Shannon, and Simpson diversity plots in one row
 rich_plot + shannon_plot + simpson_plot +
   patchwork::plot_annotation(
-    title = "Alpha Diversity Comparison Across Five Groups (Donor, SI/RI 0&7)",
+    title = "Alpha Diversity Comparison(Donor, SI/RI 0&7)",
     theme = theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold")))
 
 ```
