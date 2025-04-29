@@ -168,7 +168,7 @@ phylum_df %>%
 
 ## Faceted Bar plot 
 
-```{r phylum-facet-bar, fig.width=5, fig.height=6}
+```{r phylum-facet-bar, fig.width=12, fig.height=10}
 # Plot Phylum relative abundance across Groups (Unified Style)
 
 phylum_df %>%
@@ -319,7 +319,7 @@ genus_df <-
 
 
 ## Firmicutes Genera
-```{r Firmicutes-genus, fig.width=6, fig.height=6}
+```{r Firmicutes-genus, fig.width=12, fig.height=12}
 
 selected_firmicutes_genus <- 
   genus_df %>%
@@ -361,7 +361,7 @@ After SI7 treatment: The key beneficial genera, including Faecalibacterium, Blau
 
 
 ## Proteobacteria Genera
-```{r Proteobacteria-genus, fig.width=6, fig.height=6}
+```{r Proteobacteria-genus, fig.width=6, fig.height=4}
 selected_proteo_genus <- 
   genus_df %>%
   filter(Phylum == "Proteobacteria") %>%
@@ -432,7 +432,7 @@ genus_df %>%
 
 
 ## Desulfobacterota Genera
-```{r Desulfobacterota-genus, fig.width=6, fig.height=6}
+```{r Desulfobacterota-genus, fig.width=6, fig.height=4}
 
 selected_desulfo_genus <- 
   genus_df %>%
@@ -594,7 +594,7 @@ desulfo_plot <- ASV_df %>%
   theme(strip.text = element_text(face = "bold"),
         axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
 
-desulfo_plot
+## desulfo_plot
 ```
 
 
