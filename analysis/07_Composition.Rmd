@@ -168,7 +168,7 @@ phylum_df %>%
 
 ## Faceted Bar plot 
 
-```{r phylum-facet-bar, fig.width=5, fig.height=12}
+```{r phylum-facet-bar, fig.width=5, fig.height=6}
 # Plot Phylum relative abundance across Groups (Unified Style)
 
 phylum_df %>%
@@ -505,6 +505,179 @@ In contrast, successful recovery of a beneficial genus profile (especially withi
 </span>
 
 
+```{r blautia-ASV-analysis, fig.width=12, fig.height=8}
+
+ASV_df <- scaled_physeq %>%
+  prune_taxa(taxa_sums(.) >= 100, .) %>%     
+  transform_sample_counts(function(x) x / sum(x)) %>%
+  psmelt() %>%
+  rename(SampleID = sample_Sample)             
 
 
+metadata_fixed <- read.csv("data/metadata.csv") %>%
+  mutate(Group = sapply(SampleName, assign_group)) %>%
+  select(SampleName, Group)
 
+
+ASV_df <- ASV_df %>%
+  left_join(metadata_fixed, by = "SampleName")
+
+
+ASV_df <- ASV_df %>%
+  rename(Group = Group.x) %>%
+  select(-Group.y)
+
+top_blautia_asvs <- ASV_df %>%
+  filter(Genus == "Blautia") %>%
+  group_by(OTU) %>%
+  summarise(mean_abund = mean(Abundance)) %>%
+  filter(mean_abund > 0.005, !OTU %in% c("ASV_0024", "ASV_0034")) %>%
+  pull(OTU)
+
+library(ggplot2)
+
+blautia_plot <- ASV_df %>%
+  filter(OTU %in% top_blautia_asvs,
+         Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  facet_wrap(~ OTU, scales = "free_y", nrow = 2) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Blautia ASVs Relative Abundance across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(strip.text = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+
+blautia_plot
+
+```
+
+
+```{r desulfovibrio-ASV-analysis, fig.width=12, fig.height=8}
+
+ASV_df <- scaled_physeq %>%
+  prune_taxa(taxa_sums(.) >= 100, .) %>%     
+  transform_sample_counts(function(x) x / sum(x)) %>%
+  psmelt() %>%
+  rename(SampleID = sample_Sample)             
+
+metadata_fixed <- read.csv("data/metadata.csv") %>%
+  mutate(Group = sapply(SampleName, assign_group)) %>%
+  select(SampleName, Group)
+
+ASV_df <- ASV_df %>%
+  left_join(metadata_fixed, by = "SampleName")
+
+ASV_df <- ASV_df %>%
+  rename(Group = Group.x) %>%
+  select(-Group.y)
+
+top_desulfo_asvs <- ASV_df %>%
+  filter(Genus == "Desulfovibrio") %>%
+  group_by(OTU) %>%
+  summarise(mean_abund = mean(Abundance)) %>%
+  pull(OTU)
+
+desulfo_plot <- ASV_df %>%
+  filter(OTU %in% top_desulfo_asvs,
+         Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  facet_wrap(~ OTU, scales = "free_y", nrow = 1) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Desulfovibrio ASVs Relative Abundance across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(strip.text = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+
+desulfo_plot
+```
+
+
+```{r Akkermansia-ASV-analysis, fig.width=12, fig.height=8}
+# --- Akkermansia ASV Analysis ---
+top_akk_asvs <- ASV_df %>%
+  filter(Genus == "Akkermansia") %>%
+  group_by(OTU) %>%
+  summarise(mean_abund = mean(Abundance)) %>%
+  filter(mean_abund > 0.03) %>%  # 可根据需要调整阈值
+  pull(OTU)
+
+akk_plot <- ASV_df %>%
+  filter(OTU %in% top_akk_asvs,
+         Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  facet_wrap(~ OTU, scales = "free_y", nrow = 2) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Akkermansia ASVs Relative Abundance across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(strip.text = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+
+akk_plot
+```
+
+
+```{r Escherichia-Shigella-ASV-analysis, fig.width=12, fig.height=8}
+# --- Escherichia-Shigella ASV Analysis ---
+top_escher_asvs <- ASV_df %>%
+  filter(Genus == "Escherichia-Shigella") %>%
+  group_by(OTU) %>%
+  summarise(mean_abund = mean(Abundance)) %>%
+  filter(mean_abund > 0.005) %>%  
+  pull(OTU)
+
+escher_plot <- ASV_df %>%
+  filter(OTU %in% top_escher_asvs,
+         Group %in% c("Donor", "RI0", "RI7", "SI0", "SI7")) %>%
+  ggplot(aes(x = Group, y = Abundance, fill = Group)) +
+  facet_wrap(~ OTU, scales = "free_y", nrow = 2) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.7) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Escherichia-Shigella ASVs Relative Abundance across Groups",
+       x = "Group", y = "Relative Abundance") +
+  theme_bw() +
+  theme(strip.text = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+
+escher_plot
+```
+
+<span style="color: red;">Our ASV-level plots successfully captured several of the most abundant ASVs in the entire dataset. Specifically, ASV_0001, ASV_0002, ASV_0003, and ASV_0004 were all included in the focused visualizations for the genera Blautia, Akkermansia, and Escherichia-Shigella
+</span>
+
+
+<span style="color: red;">
+The ASV-level plots provide high-resolution insights into microbial dynamics following FMT, revealing patterns that are consistent with observed treatment outcomes. Notably, ASVs within Blautia, Akkermansia, and Escherichia-Shigella displayed trends that closely mirror either successful microbiota engraftment or persistent dysbiosis.
+
+For Blautia, a genus often associated with beneficial gut functions, several ASVs (such as ASV_0001 and ASV_0003) were highly abundant in donor samples and reappeared at similar levels in SI7 patients after treatment. In contrast, these same ASVs were largely absent in RI7 patients, suggesting a failure of engraftment. This indicates that successful restoration of these key commensals may serve as a microbial signature of effective FMT in the SI group.
+
+Interestingly, the ASV-level analysis of Akkermansia revealed a single ASV (ASV_0002) that spiked dramatically in the RI7 group, despite being nearly absent in donors, SI0 and RI0 samples. This points to a possible overgrowth or unstable colonization event, potentially reflecting mucosal disruption or host incompatibility. In contrast, SI recipients maintained relatively low levels of this ASV, which may indicate a more stable and less perturbed recovery trajectory.
+
+In the case of Escherichia-Shigella, ASV_0004 showed a sharp decline in abundance post-treatment, particularly in SI7 samples. While both groups saw some reduction, the SI group exhibited a more consistent and pronounced suppression of this potentially pathogenic taxon, further supporting the notion that SI treatment more effectively restored a healthier microbial profile.
+
+Altogether, these ASV-specific trends suggest that different outcomes in microbial restoration are driven not only by genus-level shifts, but also by the behavior of distinct ASVs. The SI group exhibited signs of successful donor engraftment, controlled recovery, and reduced opportunistic expansion, while the RI group appeared to retain dysbiotic features or experience unstable shifts. These findings emphasize the importance of ASV-level analysis in uncovering subtle, yet biologically meaningful, patterns following microbiome interventions.
+</span>
+
+<span style="color: red;">
+Our ASV-level findings both confirm previously reported associations and reveal potentially novel dynamics following FMT. Specifically, ASVs corresponding to Blautia (ASV_0001 and ASV_0003) and Escherichia-Shigella (ASV_0004) mirror trends described in Langdon et al. (2021), where successful FMT recipients (SI group) showed clear reappearance of Blautia ASVs and a consistent reduction in Escherichia-Shigella abundance. These patterns reinforce the idea that certain beneficial or pathogenic taxa at the ASV level can serve as microbial indicators of treatment success or persistent dysbiosis.
+
+In contrast, the behavior of Akkermansia (ASV_0002) in our analysis offers an additional perspective not fully explored in the original study. While Akkermansia is generally associated with gut health, we observed a marked spike of ASV_0002 specifically in RI patients at day 7, despite its near absence in donors and SI samples. This suggests a potential link to unstable recovery or mucosal disruption in patients who failed initial therapy, pointing to a role for Akkermansia dynamics as a marker of microbial instability.
+
+Overall, this analysis underscores the value of ASV-level resolution, which enables us to detect fine-scale differences in microbial trajectories that are not always visible at genus level. It highlights that post-FMT microbiome recovery is not just driven by broad taxonomic shifts but by specific ASV dynamics—some of which may serve as early predictors of therapeutic outcome.
+</span>
+
+
+# Session Information 
+For reproducibility 
+```{r session_info}
+devtools::session_info()
+```
